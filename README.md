@@ -1,0 +1,191 @@
+# Vibe-Research · 普通人的 AI 投研系统
+
+[![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+[![Python 3.10+](https://img.shields.io/badge/Python-3.10+-3776AB?logo=python&logoColor=white)](https://www.python.org/)
+[![React 19](https://img.shields.io/badge/React-19-61DAFB?logo=react&logoColor=white)](https://react.dev/)
+[![FastAPI](https://img.shields.io/badge/FastAPI-009688?logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com/)
+[![GitHub stars](https://img.shields.io/github/stars/simonlin1212/Vibe-Research?style=social)](https://github.com/simonlin1212/Vibe-Research/stargazers)
+
+**[产品预览](#️-产品预览) · [功能](#-功能) · [数据源](#-数据源data-sources) · [快速开始](#-快速开始) · [接入 AI](#-接入-ai) · [合规](#️-合规) · [路线图](#️-路线图) · [相关生态](#-相关生态) · [联系作者](#-联系作者)**
+
+> 给你**框架** + **看板** + 一个能**接自己 AI 的接口**。数据配齐，方向由你自己的 AI 给。
+>
+> **不荐股 · 不预测 · 无倾向。**
+
+Vibe-Research 是一个开源的「A 股 AI 投研看板」。它不替你做决定——把行情、研报、估值、财务、公告、资金面、资讯都配齐，放进一个干净的看板，再留一个能接入**你自己的 AI** 的接口。方向和结论，交给你自己配置的模型 / agent。
+
+> *An open-source A-share research dashboard: it wires up all the data and plugs into **your own AI / agent** — it never recommends a stock. You bring the model, it brings the data.*
+
+## 🖥️ 产品预览
+
+**每日复盘** — 大盘 / 短线情绪(连板股 · 成交额 TOP20) / 板块资金一屏看全，一键交给你的 AI 复盘
+
+![Vibe-Research 每日复盘](docs/screenshots/daily-review.png)
+
+<table>
+<tr>
+<td width="50%">
+
+**个股数据** — 财报速览 + 估值分位 + 资金面一屏看穿
+
+![个股数据](docs/screenshots/stock-detail.png)
+
+</td>
+<td width="50%">
+
+**资讯雷达** — 12 赛道 108 个公开源，一键提炼今日要点
+
+![资讯雷达](docs/screenshots/intel.png)
+
+</td>
+</tr>
+</table>
+
+---
+
+## ✨ 功能
+
+侧栏页面：**每日复盘 · 资讯雷达 · 板块中心 · 个股数据 · 我的持仓 · 研究记录 · 接入 AI**
+
+- **每日复盘**：大盘指数 / 市场情绪 / **短线情绪**（连板股 · 最高连板 · 封板率 · 炸板率 · 晋级率）/ **全市场成交额 TOP20** / 板块资金 / 资金轮动一屏看全，一键打包给你的 AI 生成复盘。连板股 / 成交额榜均为**客观公开榜单数据，只呈现事实、不推荐不预测**。
+- **资讯雷达**：12 赛道 108 个公开源，一键提炼今日要点；A 股公告 / 公开新闻挂钩你的关注列表。
+- **个股聚合页**：估值矩阵 · 历史分位 · 财务 · 研报 · 公告 · 新闻 · **资金面**（融资融券 / 股东户数 / 主力资金流 / 分红 / 大宗交易）· **龙虎榜** · **解禁** · **板块归属** · **互动易问答** 一屏看穿。
+- **投研分析框架**：让 AI 分析个股时，自动按 5 个专业维度（估值 / 资金面 / 财报质量 / 行业景气 / 事件催化与风险）逐段组织结论——不用点任何按钮，你问「这票怎么样」，拿回的就是一篇覆盖全、有条理的结构化解读。**框架只规定「怎么读数据」，不规定买卖**，方向仍由你自己的 AI 决定。
+- **板块中心**：板块 + 环节骨架（零具体标的）。
+- **我的持仓**：录入即实时盈亏、已清仓记录。数据只存本地、不上传。
+- **两条 AI 出口**：网页内「问 AI / 让 AI 复盘」（填自己的 key），或 MCP 挂进 Claude Code 等 agent（用订阅额度）。
+
+## 📡 数据源（Data Sources）
+
+Vibe-Research 把两套公开数据源**直接集成进仓库**——`git clone` 下来**开箱即用，无需另外下载、接线**。
+
+### A 股全栈数据 · AStockData
+
+- **就在本仓库的 [`a-stock-data/`](a-stock-data/) 文件夹里**（v3.3.0）。十层数据架构、40 个端点，`a-stock-data/SKILL.md` **内嵌全部调用代码**，自包含、零第三方数据封装依赖，东财接口已内置限流防封。
+- **覆盖**：行情 / K线 / 研报 / 一致预期 / 估值 / 历史分位 / 财务三表 / 公告 / 龙虎榜 / 融资融券 / 大宗交易 / 股东户数 / 分红 / 资金流 / 解禁 / 概念板块 / 打板情绪 / ETF 期权 / 互动易 / 全市场行业排名 …
+- **给 agent 用**：用 Claude Code 等 agent 跑本仓库时，要调 A 股数据就看 [`a-stock-data/SKILL.md`](a-stock-data/SKILL.md)——每个接口都有 copy-paste 即用的代码。Vibe-Research 后端的数据层（`backend/astock.py`）也是从它移植的。
+- **运行依赖**：`pip install mootdx requests pandas stockstats`（自包含，v3.0 起已移除 akshare 依赖）。
+- **更新 / 上游**：<https://github.com/simonlin1212/a-stock-data> —— 想跟进最新端点、扩数据源，去这里看；**但即便你不更新，仓库自带的这份也是固定可用的快照，可以一直用。**
+
+### 全球资讯 · investment-news
+
+- 12 赛道 108 个公开 RSS 源，已并入 `backend/newsradar.py` + `backend/news_sources.json`：纯标准库、零 key、已按合规词表过滤（剔除赌 / 预测市场 / 加密等）。
+- **上游**：<https://github.com/simonlin1212/investment-news>
+
+> 数据均来自公开源。Vibe-Research 只做客观信息整理与公开榜单呈现（连板股 / 成交额榜等，与东财 / 同花顺同款客观数据），**只呈现事实、不推荐个股、不预测涨跌、不给买卖时机、不做主观评分**；用这些数据做什么分析、看什么方向，由你和你自己的 AI 决定。
+
+## 🏗 架构
+
+一套数据层 + 两条 AI 出口：
+
+```
+Vibe-Research/
+├── a-stock-data/     A 股全栈数据工具箱（数据源，v3.3，自带即用）
+├── backend/          FastAPI :8900
+│   ├── astock.py       A 股数据（移植自 a-stock-data）
+│   ├── newsradar.py    资讯雷达（移植自 investment-news）
+│   ├── market.py       市场情绪 + 板块资金流
+│   ├── portfolio.py    持仓 + 已清仓（本地缓存）
+│   ├── chat.py         系统 AI（OpenAI 兼容 function-calling）
+│   └── mcp_server.py   MCP server（给 Claude Code 等 agent）
+└── frontend/         Vite + React 19 + TS + Tailwind（玻璃暖橙主题）:5899
+```
+
+**分级依赖**：行情（腾讯）+ 研报 / 公告（东财）**秒装可用**；akshare / mootdx 惰性导入，缺失时对应端点返回 501 + 安装提示，不拖垮服务。
+
+## 🚀 快速开始
+
+```bash
+# 后端（:8900）
+cd backend && python3 -m venv .venv && .venv/bin/pip install -r requirements.txt
+.venv/bin/python -m uvicorn app:app --host 127.0.0.1 --port 8900
+
+# 前端（:5899）
+cd frontend && npm install && npm run dev
+# 浏览器打开 http://localhost:5899
+```
+
+## 🔌 接入 AI
+
+在「接入 AI」页配置一次，全站的「问 AI / 复盘 / 今日要点」就都用你自己的模型。**分析都由你的模型给出，本产品不校准、无倾向。** 三种方式：
+
+### 1. 订阅接入（调本机已登录的 CLI，免 API key）
+
+用你自己的**订阅额度**，不用付 API 费。已支持：**Claude Code · Codex · Qwen Code · Gemini CLI · DeepSeek CLI**（OpenCode / Cursor / Kimi 即将支持）。
+
+- **前提**：① 后端跑在你本机（云端读不到你本机 CLI）；② 对应 CLI 已安装并登录，命令在 `PATH` 上。例如：
+  - Claude Code：`npm i -g @anthropic-ai/claude-code` → `claude`（用 Claude 订阅登录）
+  - Codex：装 OpenAI Codex CLI → `codex login`（用 ChatGPT 订阅）
+  - Qwen / Gemini / DeepSeek：装各自 CLI 并登录
+- 在「接入 AI 页 → 订阅接入」选一个即可，**无需填 key**。
+- 原理：后端 `cli_runtime.py` 检测本机命令并 `spawn` 它一次性作答（数据已在提示词里）。⚠️ CLI 不做多轮工具调用，适合「复盘 / 今日要点 / 个股页问 AI」这类**数据已备好**的场景；要 AI 自己现场调数据工具的自由问答，用下面的「API 接入」。
+
+### 2. API 接入（填自己的 key）
+
+「接入 AI 页 → API 接入」选一个模型，**baseURL 自动填好**，只需粘 key。内置 **DeepSeek / 豆包 / MiniMax / OpenAI / OpenRouter / Groq / Together / MiMo / 任意 OpenAI 兼容端点**。这条支持 function-calling——AI 会自己调数据工具（行情/估值/研报/新闻）再作答。key 只存你本地浏览器、随请求发给你自己的后端、不上传、不进仓库。
+
+### 3. MCP（给 Claude Code / 高手 agent）
+
+把后端挂成 MCP server，agent 用自己的订阅额度调 Vibe-Research 的数据工具、多步分析。命令见 [`backend/README.md`](backend/README.md)。要更全量的 A 股数据端点，用根目录 [`a-stock-data/`](a-stock-data/SKILL.md) 工具箱。
+
+## 🧪 测试
+
+```bash
+cd backend && .venv/bin/pip install -r requirements-dev.txt
+.venv/bin/pytest -m "not live"   # 离线单测 + API 校验（快、稳，无需联网）
+.venv/bin/pytest -m live          # 联网核对数据源 shape（升级 / 发布前跑一遍）
+```
+
+## ⚖️ 合规
+
+- 只做客观数据整理与公开榜单呈现：**不荐股、不预测涨跌、不给买卖时机、不承诺收益、不做主观评分**；中立无倾向。
+- 连板股 / 成交额榜等均为**客观公开榜单数据**（东财 / 同花顺同款），产品只如实呈现、不附带任何推荐或预测。
+- 所有分析方向由你自己配置的 AI 给出，与本产品无关。UI 无买卖按钮；估值历史分位只标位置、不划买卖线。
+- **持仓 / 关注股 / API key 只存本地浏览器，不上传、不进仓库。**
+
+## 🗺️ 路线图
+
+分阶段推进；数据 / 信息整理层傻瓜化并入，信号 / 洞察层留手。
+
+| 阶段 | 内容 | 状态 |
+|---|---|---|
+| 数据层 | a-stock-data v3.3 全栈（40 端点）+ investment-news 资讯，自带即用 | ✅ 已完成 |
+| 每日复盘 | 大盘 / 短线情绪（连板股）/ 全市场成交额 TOP20 / 板块资金 | ✅ 已完成 |
+| 个股聚合 | 财报速览 + 估值分位 + 财务 + 研报 + 资金面 / 筹码 | ✅ 已完成 |
+| 接入 AI | 订阅接入多 CLI + API 多模型 + MCP，全链路流式 | ✅ 已完成 |
+| 板块中心 | 19 个板块产业链环节逐个实时核实补全 | 🚧 进行中 |
+| 事件概率 | 全球宏观预期概率 tab | 📋 规划中 |
+| 零成本部署 | GitHub Actions 每日推送（免服务器、Fork 即用） | 📋 规划中 |
+| 多市场 | 接入 global-stock-data（美股 / 港股） | 📋 规划中 |
+
+## 🏛 相关生态
+
+Vibe-Research 用到的数据 / 工具，来自同一套自研开源体系（都在 [`simonlin1212`](https://github.com/simonlin1212)）：
+
+| 仓库 | 定位 |
+|---|---|
+| [**a-stock-data**](https://github.com/simonlin1212/a-stock-data) | A 股全栈数据工具包（10 层 · 40 端点）—— 本项目的 A 股数据引擎 |
+| [**global-stock-data**](https://github.com/simonlin1212/global-stock-data) | 美股 / 港股全栈数据工具包（7 层 · 17 端点） |
+| [**investment-news**](https://github.com/simonlin1212/investment-news) | 全球产业链资讯看板（12 赛道一一对应 A 股板块）—— 本项目的资讯源 |
+| [**Agent-Staff**](https://github.com/simonlin1212/Agent-Staff) | 把公司 Agent 化：每部门一个 AI agent + CEO 参谋长，常驻飞书 |
+
+## 📬 联系作者
+
+作者 **Simon** —— 独立开发者，长期做「用 AI 做投研」的方法与工具。
+
+- 🌐 主页：<https://www.simonlin.net>
+- 💬 用 AI 搭投研系统的完整思路、更多开源工具，都在主页；也欢迎交流企业 AI 落地。
+
+## 🙏 致谢
+
+- A 股数据引擎：[a-stock-data](https://github.com/simonlin1212/a-stock-data)
+- 资讯：[investment-news](https://github.com/simonlin1212/investment-news)
+- 界面设计语言参考并致谢：[HKUDS/Vibe-Trading](https://github.com/HKUDS/Vibe-Trading)（仅借鉴 UI，底层为全新实现）
+
+## ⚠️ 免责声明
+
+本项目仅供学习与研究，**不构成任何投资建议**。看板只做客观数据整理与公开榜单呈现——不推荐个股、不预测涨跌、不给买卖时机、不承诺收益；所有分析方向由你自己配置的 AI 给出，与本产品无关。股市有风险，请独立决策、自行核实，风险自担。
+
+## 📄 License
+
+MIT
