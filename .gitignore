@@ -36,3 +36,8 @@ frontend/tsconfig.tsbuildinfo
 .vscode/
 .idea/
 desktop.ini
+
+# 运行时日志（本地启动脚本生成）
+scripts/logs/
+scripts/launcher_output.txt
+scripts/npm_log.txt
