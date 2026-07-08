@@ -26,9 +26,10 @@ _CLI_DEFS: dict[str, dict] = {
     "claude": {
         "bins": ["claude", "openclaude"],
         "delivery": "system-file",
-        # -p 非交互、纯文本输出、系统提示词走文件；禁掉所有工具（只让它把问题答成文字，不读文件/联网/执行）
+        # -p 非交互、纯文本输出、系统提示词走文件；禁掉所有工具（只让它把问题答成文字，不读文件/联网/执行）。
+        # --strict-mcp-config 防止加载用户本地配置的 MCP server，避免 -p 非交互模式下因等待工具授权而挂起 300s。
         "build_args": lambda sys_file: [
-            "-p", "--output-format", "text", "--system-prompt-file", sys_file,
+            "-p", "--strict-mcp-config", "--output-format", "text", "--system-prompt-file", sys_file,
             "--disallowedTools", "Read", "Write", "Edit", "Glob", "Grep", "Bash",
             "NotebookEdit", "WebFetch", "WebSearch", "TodoWrite", "Task",
         ],
@@ -121,6 +122,8 @@ def run_cli(kind: str, system_prompt: str, user_prompt: str) -> str:
                 input=stdin_payload,
                 capture_output=True,
                 text=True,
+                encoding="utf-8",
+                errors="replace",
                 cwd=tmpdir,
                 env=env,
                 timeout=_CLI_TIMEOUT_S,
@@ -167,7 +170,8 @@ def run_cli_stream(kind: str, system_prompt: str, user_prompt: str):
 
         proc = subprocess.Popen(
             [bin_path, *args], stdin=subprocess.PIPE, stdout=subprocess.PIPE,
-            stderr=subprocess.DEVNULL, cwd=tmpdir, env=env, text=True, bufsize=1,
+            stderr=subprocess.DEVNULL, cwd=tmpdir, env=env, text=True,
+            encoding="utf-8", errors="replace", bufsize=1,
         )
         if stdin_payload is not None:
             try:
