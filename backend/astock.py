@@ -666,29 +666,66 @@ def margin_stock_rank(top: int = 10, date: str | None = None) -> dict:
     return {"buy": buy, "sell": sell, "date": trade_date}
 
 
+_SECTOR_MARGIN_REPORT = "RPTA_WEB_BKJYMXN"
+_INDUSTRY_BOARD_TYPE = "005"
+_SECTOR_MARGIN_COLUMNS = (
+    "BOARD_CODE,BOARD_NAME,FIN_NETBUY_AMT,FIN_BALANCE,"
+    "FIN_BUY_AMT,FIN_REPAY_AMT,MARGIN_BALANCE,TRADE_DATE"
+)
+_SECTOR_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _validate_sector_date(date: str | None) -> str | None:
+    """校验日期格式 YYYY-MM-DD；无效值抛出 ValueError。"""
+    if date is None:
+        return None
+    if not _SECTOR_DATE_RE.match(date):
+        raise ValueError("date must be YYYY-MM-DD")
+    datetime.strptime(date, "%Y-%m-%d")
+    return date
+
+
+def _latest_sector_margin_date() -> str:
+    """东财行业融资融券报表（RPTA_WEB_BKJYMXN）最新交易日。"""
+    rows = eastmoney_datacenter(
+        _SECTOR_MARGIN_REPORT, columns="TRADE_DATE",
+        filter_str=f'(BOARD_TYPE_CODE="{_INDUSTRY_BOARD_TYPE}")',
+        page_size=1, sort_columns="TRADE_DATE", sort_types="-1")
+    return str(rows[0].get("TRADE_DATE", ""))[:10] if rows else ""
+
+
 def margin_sector_rank(top: int = 10, date: str | None = None) -> dict:
-    """A股行业板块融资余额净买入/卖出前 N（指定日期或最新交易日）。"""
-    stock_rank = margin_stock_rank(top=500, date=date)
-    all_rows = stock_rank.get("buy", []) + stock_rank.get("sell", [])
-    if not all_rows:
-        return {"buy": [], "sell": [], "date": stock_rank.get("date")}
+    """A股行业板块融资余额净买入/卖出前 N（指定日期或最新交易日）。
 
-    # 用 market_turnover_rank 拿到 code -> industry 映射（覆盖大部分活跃股）
-    try:
-        turnover = market_turnover_rank(2000)
-    except Exception:
-        turnover = []
-    industry_map = {r["code"]: r.get("industry", "") for r in turnover if r.get("code")}
+    直接采用东财「融资融券行业交易统计」板块明细（RPTA_WEB_BKJYMXN，
+    BOARD_TYPE_CODE=005），不再由个股聚合，避免行业映射不全导致的数据偏差。
+    """
+    if date is not None:
+        target = _validate_sector_date(date)
+    else:
+        target = _latest_sector_margin_date()
+        if target:
+            target = _validate_sector_date(target)
+    if not target:
+        return {"buy": [], "sell": [], "date": ""}
 
-    sector_net: dict[str, float] = {}
-    for r in all_rows:
-        industry = industry_map.get(r["code"], "其他")
-        sector_net[industry] = sector_net.get(industry, 0.0) + r.get("rzjme", 0)
+    filter_str = f'(BOARD_TYPE_CODE="{_INDUSTRY_BOARD_TYPE}")(TRADE_DATE=\'{target}\')'
+    rows = eastmoney_datacenter(
+        _SECTOR_MARGIN_REPORT, columns=_SECTOR_MARGIN_COLUMNS,
+        filter_str=filter_str, page_size=500,
+        sort_columns="FIN_NETBUY_AMT", sort_types="-1")
+    if not rows:
+        return {"buy": [], "sell": [], "date": target}
 
-    items = [{"name": k, "rzjme": v} for k, v in sector_net.items() if k]
-    buy = sorted([i for i in items if i["rzjme"] > 0], key=lambda x: -x["rzjme"])[:top]
-    sell = sorted([i for i in items if i["rzjme"] < 0], key=lambda x: x["rzjme"])[:top]
-    return {"buy": buy, "sell": sell, "date": stock_rank.get("date")}
+    parsed = [{
+        "name": r.get("BOARD_NAME", ""),
+        "rzjme": (r.get("FIN_NETBUY_AMT") or 0),
+        "rzye": (r.get("FIN_BALANCE") or 0),
+        "rzrqye": (r.get("MARGIN_BALANCE") or 0),
+    } for r in rows]
+    buy = sorted([r for r in parsed if r["rzjme"] > 0], key=lambda x: -x["rzjme"])[:top]
+    sell = sorted([r for r in parsed if r["rzjme"] < 0], key=lambda x: x["rzjme"])[:top]
+    return {"buy": buy, "sell": sell, "date": target}
 
 
 def block_trade(code: str, page_size: int = 20) -> list[dict]:

@@ -1,6 +1,8 @@
 """纯逻辑单测（无网络、快、确定）：市场前缀、估值计算、行情解析。"""
 import math
 
+import pytest
+
 import astock
 
 
@@ -121,25 +123,63 @@ def test_margin_stock_rank_by_date(monkeypatch):
 
 
 def test_margin_sector_rank(monkeypatch):
-    """按个股行业聚合融资净买入。"""
-    calls = []
-    def fake_datacenter(*a, **k):
-        calls.append(k.get("page_number", 1))
-        # 第一页返回目标日期数据，第二页起返回更旧日期，模拟分页截止
-        if len(calls) == 1:
-            return [
-                {"DATE": "2026-07-08 00:00:00", "SCODE": "000001", "SECNAME": "A", "RZYE": 100, "RZJME": 50, "RZRQYE": 150, "RZRQYECZ": 10},
-                {"DATE": "2026-07-08 00:00:00", "SCODE": "000002", "SECNAME": "B", "RZYE": 100, "RZJME": 30, "RZRQYE": 130, "RZRQYECZ": 5},
-            ]
-        return [{"DATE": "2026-07-07 00:00:00", "SCODE": "000003", "SECNAME": "C", "RZYE": 100, "RZJME": 10, "RZRQYE": 100, "RZRQYECZ": 0}]
+    """直接采用东财行业融资融券报表（RPTA_WEB_BKJYMXN）排序行业净买入。"""
+    def fake_datacenter(report_name, columns, filter_str="", page_size=50, page_number=1,
+                        sort_columns="", sort_types="-1"):
+        # 最新交易日探测
+        if sort_columns == "TRADE_DATE" and page_size == 1:
+            return [{"TRADE_DATE": "2026-07-08 00:00:00"}]
+        return [
+            {"BOARD_NAME": "银行", "FIN_NETBUY_AMT": 120, "FIN_BALANCE": 1000,
+             "MARGIN_BALANCE": 1100, "TRADE_DATE": "2026-07-08 00:00:00"},
+            {"BOARD_NAME": "半导体", "FIN_NETBUY_AMT": -80, "FIN_BALANCE": 2000,
+             "MARGIN_BALANCE": 2100, "TRADE_DATE": "2026-07-08 00:00:00"},
+            {"BOARD_NAME": "电力", "FIN_NETBUY_AMT": 50, "FIN_BALANCE": 500,
+             "MARGIN_BALANCE": 600, "TRADE_DATE": "2026-07-08 00:00:00"},
+            {"BOARD_NAME": "家电", "FIN_NETBUY_AMT": 0, "FIN_BALANCE": 300,
+             "MARGIN_BALANCE": 350, "TRADE_DATE": "2026-07-08 00:00:00"},
+        ]
 
     monkeypatch.setattr(astock, "eastmoney_datacenter", fake_datacenter)
-    monkeypatch.setattr(astock, "market_turnover_rank", lambda n: [
-        {"code": "000001", "industry": "银行"}, {"code": "000002", "industry": "银行"},
-    ])
-    res = astock.margin_sector_rank(top=1)
-    assert res["buy"][0]["name"] == "银行"
-    assert res["buy"][0]["rzjme"] == 80
+    res = astock.margin_sector_rank(top=2)
+    assert res["date"] == "2026-07-08"
+    assert [r["name"] for r in res["buy"]] == ["银行", "电力"]
+    assert [r["name"] for r in res["sell"]] == ["半导体"]
+    # top 限制生效，且净买入为 0 的行业不进入榜单
+    assert len(res["buy"]) == 2
+    assert "家电" not in [r["name"] for r in res["buy"] + res["sell"]]
+
+
+def test_margin_sector_rank_by_date(monkeypatch):
+    """指定日期时直接查询该日行业数据；无数据时返回空并带日期。"""
+    def fake_datacenter(report_name, columns, filter_str="", page_size=50, page_number=1,
+                        sort_columns="", sort_types="-1"):
+        if "2026-07-07" in filter_str:
+            return [
+                {"BOARD_NAME": "医药", "FIN_NETBUY_AMT": -30, "FIN_BALANCE": 800,
+                 "MARGIN_BALANCE": 900, "TRADE_DATE": "2026-07-07 00:00:00"},
+            ]
+        return []
+
+    monkeypatch.setattr(astock, "eastmoney_datacenter", fake_datacenter)
+    res = astock.margin_sector_rank(top=1, date="2026-07-07")
+    assert res["date"] == "2026-07-07"
+    assert res["sell"][0]["name"] == "医药"
+    assert res["buy"] == []
+
+    empty = astock.margin_sector_rank(top=1, date="2026-07-06")
+    assert empty["date"] == "2026-07-06"
+    assert empty["buy"] == []
+    assert empty["sell"] == []
+
+
+def test_margin_sector_rank_invalid_date(monkeypatch):
+    """非法日期在数据层即被拦截，避免注入 Eastmoney filter。"""
+    monkeypatch.setattr(astock, "eastmoney_datacenter", lambda *a, **k: [])
+    with pytest.raises(ValueError):
+        astock.margin_sector_rank(date="2024-13-45")
+    with pytest.raises(ValueError):
+        astock.margin_sector_rank(date="2024-01-01')(BOARD_TYPE_CODE=005")
 
 
 def test_gstock_batch_quotes_empty():
