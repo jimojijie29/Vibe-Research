@@ -184,3 +184,30 @@ def get_turnover_top() -> dict:
 def get_global_indices() -> list[dict]:
     """全球指数快照（美股 / 港股，含缓存 5 分钟）。空结果不缓存。"""
     return _cached("global_indices", gstock.global_indices, valid=bool)
+
+
+def get_market_snapshot() -> dict:
+    """9点看盘聚合快照：A股指数、全球指数、成交额榜、两市融资融券余额。"""
+    def build():
+        from concurrent.futures import ThreadPoolExecutor, as_completed
+
+        def fetch(name, fn):
+            return name, fn()
+
+        tasks = {
+            "a_indices": astock.index_quote,
+            "global_indices": gstock.global_indices,
+            "turnover": lambda: astock.market_turnover_rank(20),
+            "margin_balance": astock.market_margin_balance,
+        }
+        results: dict = {}
+        with ThreadPoolExecutor(max_workers=4) as pool:
+            futures = {pool.submit(fetch, name, fn): name for name, fn in tasks.items()}
+            for fut in as_completed(futures):
+                name, val = fut.result()
+                results[name] = val
+        return {
+            **results,
+            "updated": datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M"),
+        }
+    return _cached("snapshot", build, valid=lambda v: bool(v.get("a_indices") or v.get("global_indices")))

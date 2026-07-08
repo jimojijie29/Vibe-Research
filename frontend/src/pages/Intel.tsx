@@ -8,7 +8,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { SaveNoteButton } from "@/components/ui/SaveNoteButton";
 import { api, ApiError, type RadarData, type Industry, type Announcement, type NewsItem } from "@/lib/api";
-import { loadWatch } from "@/lib/watchlist";
+import { loadWatch, isAShare } from "@/lib/watchlist";
 import { hasLlm, chatStream } from "@/lib/llm";
 import { cn } from "@/lib/utils";
 
@@ -186,7 +186,7 @@ interface FeedRow { code: string; name: string; when: string; title: string; met
 const MAX_ROWS = 60;
 
 function WatchlistFeed({ kind }: { kind: "filings" | "news" }) {
-  const [codes, setCodes] = useState<string[]>(loadWatch);
+  const [codes, setCodes] = useState<string[]>(() => loadWatch().filter(isAShare));
   const [rows, setRows] = useState<FeedRow[]>([]);
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState<string | null>(null);
@@ -242,14 +242,14 @@ function WatchlistFeed({ kind }: { kind: "filings" | "news" }) {
     }
   }, [kind]);
 
-  useEffect(() => { const cs = loadWatch(); setCodes(cs); load(cs); }, [load]);
+  useEffect(() => { const cs = loadWatch().filter(isAShare); setCodes(cs); load(cs); }, [load]);
 
-  const refresh = () => { const cs = loadWatch(); setCodes(cs); load(cs); };
+  const refresh = () => { const cs = loadWatch().filter(isAShare); setCodes(cs); load(cs); };
 
   if (!codes.length) {
     return (
       <div className="rounded-lg border border-dashed border-border/70 p-8 text-center text-sm text-muted-foreground/70">
-        还没有关注股票。到<Link to="/daily-review" className="text-primary">「每日复盘」</Link>加自选（6 位代码），这里会汇总它们的{kind === "filings" ? "公告" : "新闻"}。
+        还没有 A 股关注股票。到<Link to="/daily-review" className="text-primary">「每日复盘」</Link>加自选（6 位代码），这里会汇总它们的{kind === "filings" ? "公告" : "新闻"}。全球股票请到「自选股」页查看。
       </div>
     );
   }

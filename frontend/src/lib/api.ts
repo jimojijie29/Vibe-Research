@@ -232,6 +232,27 @@ export interface GlobalStock {
   code: string; name: string; market: string;
   quote: GlobalQuote; metrics: GlobalMetrics | null;
 }
+export interface GlobalBatchQuote {
+  symbol: string; code: string | null; name: string | null; market: string | null; quote: GlobalQuote | null;
+}
+
+export interface MarketSnapshot {
+  a_indices: IndexQuote[];
+  global_indices: GlobalIndex[];
+  turnover: TurnoverStock[];
+  margin_balance: {
+    sh_rzye: number | null; sh_rqye: number | null; sh_rzrqye: number | null;
+    sz_rzye: number | null; sz_rqye: number | null; sz_rzrqye: number | null;
+  };
+  updated: string;
+}
+
+export interface MarginRankItem {
+  name: string; code?: string; rzjme: number; rzye?: number; rzrqye?: number; rzrqyecz?: number;
+}
+export interface MarginRank {
+  buy: MarginRankItem[]; sell: MarginRankItem[]; date?: string;
+}
 
 export const api = {
   health: () => get<{ ok: boolean }>("/health"),
@@ -241,6 +262,12 @@ export const api = {
   turnoverTop: () => get<TurnoverTop>("/market/turnover-top"),
   globalIndices: () => get<GlobalIndex[]>("/global/indices"),
   globalStock: (symbol: string) => get<GlobalStock>(`/global/stock?symbol=${encodeURIComponent(symbol)}`),
+  globalQuotes: (symbols: string) => get<GlobalBatchQuote[]>(`/global/quotes?symbols=${encodeURIComponent(symbols)}`),
+  marketSnapshot: () => get<MarketSnapshot>("/market/snapshot"),
+  marginStockRank: (top = 10, date?: string) =>
+    get<MarginRank>(`/margin/stock-rank?top=${top}${date ? `&date=${encodeURIComponent(date)}` : ""}`),
+  marginSectorRank: (top = 10, date?: string) =>
+    get<MarginRank>(`/margin/sector-rank?top=${top}${date ? `&date=${encodeURIComponent(date)}` : ""}`),
   radar: () => get<RadarData>("/radar"),
   radarRefresh: () => request<RadarData>("/radar/refresh", "POST"),
   portfolio: () => get<PortfolioData>("/portfolio"),

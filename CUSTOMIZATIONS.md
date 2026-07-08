@@ -48,6 +48,33 @@
 - **说明**: `npm install` 生成的 lock 文件更新；`.gitignore` 增加 `desktop.ini` 等系统文件忽略。
 - **上游风险**: `package-lock.json` 容易因平台/Node 版本差异与上游冲突，同步时建议接受上游版本后重新 `npm install`。
 
+### 6. 「每日复盘」增加「9 点看盘」Tab
+
+- **文件**:
+  - `backend/astock.py`
+  - `backend/market.py`
+  - `backend/gstock.py`
+  - `backend/app.py`
+  - `backend/tests/test_api.py`
+  - `backend/tests/test_pure.py`
+  - `frontend/src/lib/api.ts`
+  - `frontend/src/lib/watchlist.ts`
+  - `frontend/src/lib/utils.ts`
+  - `frontend/src/pages/DailyReview.tsx`
+  - `frontend/src/pages/MorningView.tsx`
+  - `frontend/src/pages/Watchlist.tsx`
+  - `frontend/src/pages/Intel.tsx`
+- **说明**:
+  - 后端 `A_INDICES` 扩展为 6 只大盘指数（上证/深证成指/创业板指/沪深300/中证1000/科创50）。
+  - 新增两市融资余额、个股/行业融资净买入卖出排名数据函数与接口；`margin_stock_rank` / `margin_sector_rank` 支持 `date` 参数，可查询指定交易日，默认返回最近交易日数据。
+  - 新增 `/api/market/snapshot`、`/api/margin/stock-rank`、`/api/margin/sector-rank`、`/api/global/quotes`。
+  - 美/港股新增批量行情接口 `gstock.batch_quotes`。
+  - 前端「每日复盘」改为 Tab 切换：「9 点看盘」与「AI 复盘」。
+  - 「9 点看盘」包含：A 股指数、全球市场、关注股票（支持 A 股+全球）、成交额/融资余额、行业与个股融资净买入/卖出 Top10。
+  - 融资排名区块增加日期选择器，默认展示最近交易日数据；指定日期无数据时提示「该日无数据」。
+  - 自选股（`watchlist.ts`）支持全球代码（AAPL、00700、005930.KS 等），并在「自选股」页展示全球行情；资讯雷达的公告/新闻仅汇总 A 股关注。
+- **上游风险**: 高。`DailyReview.tsx`、`Watchlist.tsx`、`Intel.tsx` 以及后端 `astock.py`、`app.py` 均为上游高频修改区域，同步后需重点检查 Tab 结构、融资排名接口与日期参数是否仍然可用。
+
 ## 同步上游的标准流程
 
 ```bash

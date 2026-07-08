@@ -72,7 +72,7 @@
 ## 健康检查与监控
 
 - **健康端点**：`GET /api/health`
-  - 成功响应：`{"ok": true, "service": "vibe-research-api", "version": "0.1.0"}`
+  - 成功响应：`{"ok": true, "service": "vibe-research-api", "version": "0.1.1"}`
 - **关键端口**：
   - 后端：`8900`
   - 前端：`5899`
