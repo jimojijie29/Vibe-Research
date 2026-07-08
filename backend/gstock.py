@@ -180,3 +180,25 @@ def us_hk_stock(query: str) -> dict:
         "quote": quote,
         "metrics": _key_metrics(info["secucode"]) if info["market"] != "KR" else None,  # 韩股东财无 F10 财务
     }
+
+
+def batch_quotes(symbols: list[str]) -> list[dict]:
+    """批量美/港/韩股行情。symbol 如 AAPL / BABA / 00700。"""
+    out = []
+    for sym in symbols:
+        sym = sym.strip()
+        if not sym:
+            continue
+        info = resolve_symbol(sym)
+        if not info:
+            out.append({"symbol": sym, "code": None, "name": None, "market": None, "quote": None})
+            continue
+        d = _push2_stock_get(f"{info['secid_prefix']}.{info['code']}", _QUOTE_FIELDS)
+        out.append({
+            "symbol": sym,
+            "code": info["code"],
+            "name": info["name"],
+            "market": info["market"],
+            "quote": _quote_from(d or {}),
+        })
+    return out

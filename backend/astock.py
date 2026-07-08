@@ -95,7 +95,7 @@ def tencent_quote(codes: list[str]) -> dict[str, dict]:
 
 
 # A股大盘指数（前缀规则与个股不同，固定带前缀代码）
-A_INDICES = ["sh000001", "sz399001", "sz399006", "sh000300"]
+A_INDICES = ["sh000001", "sz399001", "sz399006", "sh000300", "sh000852", "sh000688"]
 
 
 def index_quote() -> list[dict]:
@@ -549,11 +549,11 @@ def market_turnover_rank(n: int = 20) -> list[dict]:
 
 
 def eastmoney_datacenter(report_name: str, columns: str = "ALL", filter_str: str = "",
-                         page_size: int = 50, sort_columns: str = "", sort_types: str = "-1") -> list[dict]:
+                         page_size: int = 50, page_number: int = 1, sort_columns: str = "", sort_types: str = "-1") -> list[dict]:
     """东财数据中心统一查询 —— 龙虎榜/解禁/融资融券/大宗交易/股东户数/分红 共用（已内置限流）。"""
     params = {
         "reportName": report_name, "columns": columns, "filter": filter_str,
-        "pageNumber": "1", "pageSize": str(page_size),
+        "pageNumber": str(page_number), "pageSize": str(page_size),
         "sortColumns": sort_columns, "sortTypes": sort_types, "source": "WEB", "client": "WEB",
     }
     try:
@@ -576,6 +576,119 @@ def margin_trading(code: str, page_size: int = 30) -> list[dict]:
         "rqye": r.get("RQYE", 0), "rqmcl": r.get("RQMCL", 0),
         "rzrqye": r.get("RZRQYE", 0),
     } for r in data]
+
+
+def market_margin_balance() -> dict:
+    """沪深两市最新融资余额 / 融券余额 / 融资融券余额（元）。"""
+    try:
+        ak = _akshare()
+        sh = ak.stock_margin_sse()
+        sz = ak.stock_margin_szse()
+    except Exception:
+        return {"sh_rzye": None, "sh_rqye": None, "sh_rzrqye": None,
+                "sz_rzye": None, "sz_rqye": None, "sz_rzrqye": None}
+
+    # SSE: columns = [日期, 融资余额, 融资买入额, 融券余量, 融券卖出量, 融券偿还量, 融资融券余额]
+    sh_row = sh.iloc[0].tolist() if not sh.empty else [None] * 7
+    # SZSE: single row, values in 亿元: [融资买入额, 融资余额, 融券卖出量, 融券余量, 融券余额, 融资融券余额]
+    sz_row = sz.iloc[0].tolist() if not sz.empty else [None] * 6
+
+    import math
+
+    def _to_yuan(v):
+        if v is None:
+            return None
+        try:
+            f = float(v)
+        except Exception:
+            return None
+        return None if math.isnan(f) or math.isinf(f) else f
+
+    sz_rzye = _to_yuan(sz_row[1]) if len(sz_row) > 1 else None
+    sz_rqye = _to_yuan(sz_row[4]) if len(sz_row) > 4 else None
+    sz_rzrqye = _to_yuan(sz_row[5]) if len(sz_row) > 5 else None
+
+    return {
+        "sh_rzye": _to_yuan(sh_row[1]) if len(sh_row) > 1 else None,
+        # SSE 不直接提供「融券余额（元）」，只提供融券余量（股数），故不填。
+        "sh_rqye": None,
+        "sh_rzrqye": _to_yuan(sh_row[6]) if len(sh_row) > 6 else None,
+        "sz_rzye": sz_rzye * 1e8 if sz_rzye is not None else None,
+        "sz_rqye": sz_rqye * 1e8 if sz_rqye is not None else None,
+        "sz_rzrqye": sz_rzrqye * 1e8 if sz_rzrqye is not None else None,
+    }
+
+
+def _margin_rows_for_date(date: str | None, max_pages: int = 10) -> tuple[list[dict], str]:
+    """获取指定日期的融资融券个股记录；date=None 时取最新交易日。
+
+    东财 `RPTA_WEB_RZRQ_GGMX` 的 DATE 过滤不生效，故按 DATE 降序分页拉取，
+    直到凑齐目标日期或越过目标日期。
+    """
+    target: str | None = date
+    rows: list[dict] = []
+    for page in range(1, max_pages + 1):
+        data = eastmoney_datacenter(
+            "RPTA_WEB_RZRQ_GGMX", page_size=500, page_number=page,
+            sort_columns="DATE", sort_types="-1")
+        if not data:
+            break
+        stop = False
+        for r in data:
+            r_date = str(r.get("DATE", ""))[:10]
+            if not r_date:
+                continue
+            if target is None:
+                target = r_date
+            if r_date == target:
+                rows.append(r)
+            elif r_date < target:
+                # 已按日期降序排列，后续及后续页均更旧
+                stop = True
+                break
+        if stop:
+            break
+    return rows, target or ""
+
+
+def margin_stock_rank(top: int = 10, date: str | None = None) -> dict:
+    """A股个股融资余额净买入/卖出前 N（指定日期或最新交易日）。"""
+    rows, trade_date = _margin_rows_for_date(date)
+    if not rows:
+        return {"buy": [], "sell": [], "date": trade_date}
+    parsed = [{
+        "code": r.get("SCODE", ""), "name": r.get("SECNAME", ""),
+        "rzye": r.get("RZYE", 0), "rzjme": r.get("RZJME", 0),
+        "rzrqye": r.get("RZRQYE", 0), "rzrqyecz": r.get("RZRQYECZ", 0),
+    } for r in rows]
+    buy = sorted([r for r in parsed if r["rzjme"] > 0], key=lambda x: -x["rzjme"])[:top]
+    sell = sorted([r for r in parsed if r["rzjme"] < 0], key=lambda x: x["rzjme"])[:top]
+    return {"buy": buy, "sell": sell, "date": trade_date}
+
+
+def margin_sector_rank(top: int = 10, date: str | None = None) -> dict:
+    """A股行业板块融资余额净买入/卖出前 N（指定日期或最新交易日）。"""
+    stock_rank = margin_stock_rank(top=500, date=date)
+    all_rows = stock_rank.get("buy", []) + stock_rank.get("sell", [])
+    if not all_rows:
+        return {"buy": [], "sell": [], "date": stock_rank.get("date")}
+
+    # 用 market_turnover_rank 拿到 code -> industry 映射（覆盖大部分活跃股）
+    try:
+        turnover = market_turnover_rank(2000)
+    except Exception:
+        turnover = []
+    industry_map = {r["code"]: r.get("industry", "") for r in turnover if r.get("code")}
+
+    sector_net: dict[str, float] = {}
+    for r in all_rows:
+        industry = industry_map.get(r["code"], "其他")
+        sector_net[industry] = sector_net.get(industry, 0.0) + r.get("rzjme", 0)
+
+    items = [{"name": k, "rzjme": v} for k, v in sector_net.items() if k]
+    buy = sorted([i for i in items if i["rzjme"] > 0], key=lambda x: -x["rzjme"])[:top]
+    sell = sorted([i for i in items if i["rzjme"] < 0], key=lambda x: x["rzjme"])[:top]
+    return {"buy": buy, "sell": sell, "date": stock_rank.get("date")}
 
 
 def block_trade(code: str, page_size: int = 20) -> list[dict]:

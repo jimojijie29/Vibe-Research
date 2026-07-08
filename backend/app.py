@@ -11,6 +11,8 @@ from __future__ import annotations
 
 import json
 import os
+import re
+from datetime import datetime, timedelta
 
 from fastapi import FastAPI, HTTPException, Query, Request
 from fastapi.middleware.cors import CORSMiddleware
@@ -257,6 +259,15 @@ def market_overview():
         raise HTTPException(502, f"市场总览异常：{e}") from e
 
 
+@app.get("/api/market/snapshot")
+def market_snapshot():
+    """9点看盘聚合快照：A股指数、全球指数、成交额榜、两市融资余额。缓存 5 分钟。"""
+    try:
+        return {"data": market.get_market_snapshot()}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"市场快照异常：{e}") from e
+
+
 @app.get("/api/market/emotion")
 def market_emotion():
     """短线情绪：连板梯队 / 最高连板 / 炸板率 / 封板率 / 晋级率 / 涨跌停家数。
@@ -302,9 +313,22 @@ def global_stock(symbol: str = Query(..., min_length=1, max_length=16)):
         raise HTTPException(502, f"美港股查询异常：{e}") from e
 
 
+@app.get("/api/global/quotes")
+def global_quotes(symbols: str = Query(..., description="逗号分隔的美/港/韩股代码")):
+    """批量美/港/韩股行情。symbol 如 AAPL,BABA,00700。最多 50 个，自动去重。"""
+    lst = [s.strip() for s in symbols.split(",") if s.strip()]
+    if not lst or len(lst) > 50 or any(len(s) > 16 for s in lst):
+        raise HTTPException(400, "symbols 必须是逗号分隔的代码，1-50 个，单码不超过 16 字符")
+    lst = list(dict.fromkeys(lst))  # 保留顺序去重
+    try:
+        return {"data": gstock.batch_quotes(lst)}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"批量美港股查询异常：{e}") from e
+
+
 @app.get("/api/indices")
 def indices():
-    """A股大盘指数实时行情（上证/深证成指/创业板指/沪深300）。仅标准库。"""
+    """A股大盘指数实时行情（上证/深证成指/创业板指/沪深300/中证1000/科创50）。仅标准库。"""
     try:
         return {"data": astock.index_quote()}
     except Exception as e:  # noqa: BLE001
@@ -472,7 +496,27 @@ def finance(code: str = Query(...)):
 # 东财有 1s 限流，这些多为日/季级静态数据，统一走 30 分钟缓存，进一步降低被封风险。
 # ---------------------------------------------------------------------------
 
-_DC_CACHE: dict = {}  # key=(endpoint, code) -> (ts, data)
+_DC_CACHE: dict = {}  # key=(endpoint, code/date...) -> (ts, data)
+
+
+_DATE_RE = re.compile(r"^\d{4}-\d{2}-\d{2}$")
+
+
+def _parse_margin_date(date: str | None) -> str | None:
+    if date is None:
+        return None
+    if not _DATE_RE.match(date):
+        raise HTTPException(400, "日期格式应为 YYYY-MM-DD")
+    try:
+        d = datetime.strptime(date, "%Y-%m-%d").date()
+    except ValueError:
+        raise HTTPException(400, "日期不存在")
+    today = datetime.now().date()
+    if d > today:
+        raise HTTPException(400, "日期不能晚于今天")
+    if (today - d).days > 365:
+        raise HTTPException(400, "日期范围不能超过一年")
+    return date
 
 
 def _cached(endpoint: str, code: str, ttl: int, fetch):
@@ -493,6 +537,38 @@ def margin(code: str = Query(...)):
         return {"data": _cached("margin", code, 1800, lambda: astock.margin_trading(code))}
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"融资融券异常：{e}") from e
+
+
+@app.get("/api/margin/stock-rank")
+def margin_stock_rank(top: int = Query(10, ge=1, le=50), date: str | None = Query(None)):
+    """A股个股融资余额净买入/卖出前 N（默认最新交易日，可指定 date）。缓存 15 分钟。"""
+    target = _parse_margin_date(date)
+    key = ("margin_stock_rank", top, target)
+    hit = _DC_CACHE.get(key)
+    if hit and _time.time() - hit[0] < 900:
+        return {"data": hit[1]}
+    try:
+        data = astock.margin_stock_rank(top, date=target)
+        _DC_CACHE[key] = (_time.time(), data)
+        return {"data": data}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"个股融资排名异常：{e}") from e
+
+
+@app.get("/api/margin/sector-rank")
+def margin_sector_rank(top: int = Query(10, ge=1, le=50), date: str | None = Query(None)):
+    """A股行业板块融资余额净买入/卖出前 N（默认最新交易日，可指定 date）。缓存 15 分钟。"""
+    target = _parse_margin_date(date)
+    key = ("margin_sector_rank", top, target)
+    hit = _DC_CACHE.get(key)
+    if hit and _time.time() - hit[0] < 900:
+        return {"data": hit[1]}
+    try:
+        data = astock.margin_sector_rank(top, date=target)
+        _DC_CACHE[key] = (_time.time(), data)
+        return {"data": data}
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"行业融资排名异常：{e}") from e
 
 
 @app.get("/api/block-trade")

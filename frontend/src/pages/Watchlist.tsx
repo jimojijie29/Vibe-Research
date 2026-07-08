@@ -4,33 +4,45 @@ import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { AskAiButton } from "@/components/ui/AskAiButton";
-import { api, type Quote } from "@/lib/api";
-import { loadWatch, saveWatch, addCodes } from "@/lib/watchlist";
+import { api, type Quote, type GlobalBatchQuote } from "@/lib/api";
+import { loadWatch, saveWatch, addCodes, isAShare, isGlobal } from "@/lib/watchlist";
 import { cn } from "@/lib/utils";
 
 // A 股红涨绿跌（与整个看板一致）。
-const color = (v: number | undefined) =>
+const color = (v: number | null | undefined) =>
   v == null ? "text-muted-foreground" : v > 0 ? "text-danger" : v < 0 ? "text-success" : "text-muted-foreground";
-const pct = (v: number | undefined) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v}%`);
+const pct = (v: number | null | undefined) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v}%`);
 
 export function Watchlist() {
   const [codes, setCodes] = useState<string[]>(loadWatch);
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
+  const [globals, setGlobals] = useState<GlobalBatchQuote[]>([]);
   const [input, setInput] = useState("");
   const [loading, setLoading] = useState(false);
   const [hint, setHint] = useState<string | null>(null);
 
   const refresh = (cs: string[]) => {
-    if (!cs.length) { setQuotes({}); return; }
+    const aShares = cs.filter(isAShare);
+    const globalSymbols = cs.filter(isGlobal);
+    setQuotes({});
+    setGlobals([]);
+    if (!aShares.length && !globalSymbols.length) return;
     setLoading(true);
-    api.quote(cs.join(",")).then(setQuotes).catch(() => {}).finally(() => setLoading(false));
+    const jobs: Promise<void>[] = [];
+    if (aShares.length) {
+      jobs.push(api.quote(aShares.join(",")).then(setQuotes).catch(() => {}));
+    }
+    if (globalSymbols.length) {
+      jobs.push(api.globalQuotes(globalSymbols.join(",")).then(setGlobals).catch(() => {}));
+    }
+    Promise.all(jobs).finally(() => setLoading(false));
   };
   useEffect(() => { refresh(loadWatch()); }, []);
 
   const add = () => {
     const { next, added } = addCodes(codes, input);
     if (added === 0) {
-      setHint(input.trim() ? "没识别到新的 6 位代码（可能已在自选里）" : null);
+      setHint(input.trim() ? "没识别到新的有效代码（可能已在自选里）" : null);
       setInput("");
       return;
     }
@@ -42,21 +54,23 @@ export function Watchlist() {
     setCodes(next); saveWatch(next); refresh(next);
   };
 
-  const aiContext = useMemo(
-    () =>
-      codes.length
-        ? "我的自选股（本地）：\n" +
-          codes
-            .map((c) => {
-              const q = quotes[c];
-              return q
-                ? `${q.name}(${c}) 现价${q.price} ${pct(q.change_pct)} PE(TTM)${q.pe_ttm ?? "—"} 换手${q.turnover_pct ?? "—"}%`
-                : `${c}（行情未取到）`;
-            })
-            .join("\n")
-        : "还没有自选股。",
-    [codes, quotes],
-  );
+  const aiContext = useMemo(() => {
+    if (!codes.length) return "还没有自选股。";
+    const lines = codes.map((c) => {
+      if (isAShare(c)) {
+        const q = quotes[c];
+        return q
+          ? `${q.name}(${c}) 现价${q.price} ${pct(q.change_pct)} PE(TTM)${q.pe_ttm ?? "—"} 换手${q.turnover_pct ?? "—"}%`
+          : `${c}（行情未取到）`;
+      }
+      const g = globals.find((x) => x.symbol === c);
+      const q = g?.quote;
+      return q?.price != null
+        ? `${g?.name || c}(${c}) 现价${q.price} ${pct(q.change_pct)}`
+        : `${c}（行情未取到）`;
+    });
+    return "我的自选股（本地）：\n" + lines.join("\n");
+  }, [codes, quotes, globals]);
 
   return (
     <div>
@@ -76,7 +90,7 @@ export function Watchlist() {
 
       <GlassCard className="mb-4">
         <label className="mb-1.5 block text-xs text-muted-foreground">
-          批量添加 —— 粘贴一串代码即可（逗号 / 空格 / 换行都行，自动识别 6 位 A 股代码）
+          批量添加 —— 粘贴一串代码即可（逗号 / 空格 / 换行都行，自动识别 A 股 6 位代码与全球代码如 AAPL / 00700 / 005930.KS）
         </label>
         <div className="flex gap-2">
           <textarea
@@ -132,16 +146,42 @@ export function Watchlist() {
               </thead>
               <tbody>
                 {codes.map((c) => {
-                  const q = quotes[c];
+                  if (isAShare(c)) {
+                    const q = quotes[c];
+                    return (
+                      <tr key={c} className="border-b border-border/30">
+                        <td className="px-2 py-2.5 font-medium">{q?.name || "—"}</td>
+                        <td className="px-2 py-2.5 font-mono text-xs text-muted-foreground">{c}</td>
+                        <td className={cn("px-2 py-2.5 font-mono", color(q?.change_pct))}>{q ? q.price : "—"}</td>
+                        <td className={cn("px-2 py-2.5 font-mono", color(q?.change_pct))}>{q ? pct(q.change_pct) : "—"}</td>
+                        <td className="px-2 py-2.5 font-mono text-muted-foreground">{q?.pe_ttm ?? "—"}</td>
+                        <td className="px-2 py-2.5 font-mono text-muted-foreground">{q?.pb ?? "—"}</td>
+                        <td className="px-2 py-2.5 font-mono text-muted-foreground">{q?.turnover_pct ?? "—"}</td>
+                        <td className="px-2 py-2.5">
+                          <button
+                            onClick={() => remove(c)}
+                            className="text-muted-foreground/50 hover:text-destructive"
+                            title="移除"
+                          >
+                            <X className="h-3.5 w-3.5" />
+                          </button>
+                        </td>
+                      </tr>
+                    );
+                  }
+                  const g = globals.find((x) => x.symbol === c);
+                  const q = g?.quote;
                   return (
                     <tr key={c} className="border-b border-border/30">
-                      <td className="px-2 py-2.5 font-medium">{q?.name || "—"}</td>
+                      <td className="px-2 py-2.5 font-medium">{g?.name || "—"}</td>
                       <td className="px-2 py-2.5 font-mono text-xs text-muted-foreground">{c}</td>
-                      <td className={cn("px-2 py-2.5 font-mono", color(q?.change_pct))}>{q ? q.price : "—"}</td>
-                      <td className={cn("px-2 py-2.5 font-mono", color(q?.change_pct))}>{q ? pct(q.change_pct) : "—"}</td>
-                      <td className="px-2 py-2.5 font-mono text-muted-foreground">{q?.pe_ttm ?? "—"}</td>
-                      <td className="px-2 py-2.5 font-mono text-muted-foreground">{q?.pb ?? "—"}</td>
-                      <td className="px-2 py-2.5 font-mono text-muted-foreground">{q?.turnover_pct ?? "—"}</td>
+                      <td className={cn("px-2 py-2.5 font-mono", color(q?.change_pct ?? 0))}>{q?.price ?? "—"}</td>
+                      <td className={cn("px-2 py-2.5 font-mono", color(q?.change_pct ?? 0))}>
+                        {q?.price == null ? "—" : pct(q.change_pct)}
+                      </td>
+                      <td className="px-2 py-2.5 font-mono text-muted-foreground">—</td>
+                      <td className="px-2 py-2.5 font-mono text-muted-foreground">—</td>
+                      <td className="px-2 py-2.5 font-mono text-muted-foreground">—</td>
                       <td className="px-2 py-2.5">
                         <button
                           onClick={() => remove(c)}
