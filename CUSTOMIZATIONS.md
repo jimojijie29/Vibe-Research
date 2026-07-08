@@ -67,6 +67,7 @@
 - **说明**:
   - 后端 `A_INDICES` 扩展为 6 只大盘指数（上证/深证成指/创业板指/沪深300/中证1000/科创50）。
   - 新增两市融资余额、个股/行业融资净买入卖出排名数据函数与接口；`margin_stock_rank` / `margin_sector_rank` 支持 `date` 参数，可查询指定交易日，默认返回最近交易日数据。
+  - `margin_sector_rank` 直接采用东财「融资融券行业交易统计」板块明细报表（`RPTA_WEB_BKJYMXN`，`BOARD_TYPE_CODE=005`）排序，避免由个股聚合带来的行业映射偏差。
   - 新增 `/api/market/snapshot`、`/api/margin/stock-rank`、`/api/margin/sector-rank`、`/api/global/quotes`。
   - 美/港股新增批量行情接口 `gstock.batch_quotes`。
   - 前端「每日复盘」改为 Tab 切换：「9 点看盘」与「AI 复盘」。
