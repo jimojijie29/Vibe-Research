@@ -5,7 +5,7 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { api, type Quote, type GlobalBatchQuote } from "@/lib/api";
-import { loadWatch, saveWatch, addCodes, isAShare, isGlobal } from "@/lib/watchlist";
+import { loadWatch, saveWatch, addCodes, isAShare, isGlobal, type WatchlistMode } from "@/lib/watchlist";
 import { cn } from "@/lib/utils";
 
 // A 股红涨绿跌（与整个看板一致）。
@@ -14,7 +14,8 @@ const color = (v: number | null | undefined) =>
 const pct = (v: number | null | undefined) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v}%`);
 
 export function Watchlist() {
-  const [codes, setCodes] = useState<string[]>(loadWatch);
+  const [mode, setMode] = useState<WatchlistMode>("premarket");
+  const [codes, setCodes] = useState<string[]>(() => loadWatch(mode));
   const [quotes, setQuotes] = useState<Record<string, Quote>>({});
   const [globals, setGlobals] = useState<GlobalBatchQuote[]>([]);
   const [input, setInput] = useState("");
@@ -37,7 +38,7 @@ export function Watchlist() {
     }
     Promise.all(jobs).finally(() => setLoading(false));
   };
-  useEffect(() => { refresh(loadWatch()); }, []);
+  useEffect(() => { refresh(loadWatch(mode)); }, [mode]);
 
   const add = () => {
     const { next, added } = addCodes(codes, input);
@@ -46,13 +47,20 @@ export function Watchlist() {
       setInput("");
       return;
     }
-    setCodes(next); saveWatch(next); setInput(""); setHint(`已添加 ${added} 只`);
+    setCodes(next); saveWatch(mode, next); setInput(""); setHint(`已添加 ${added} 只`);
     refresh(next);
   };
   const remove = (c: string) => {
     const next = codes.filter((x) => x !== c);
-    setCodes(next); saveWatch(next); refresh(next);
+    setCodes(next); saveWatch(mode, next); refresh(next);
   };
+
+  // mode 切换时重新加载
+  useEffect(() => {
+    const newCodes = loadWatch(mode);
+    setCodes(newCodes);
+    refresh(newCodes);
+  }, [mode]);
 
   const aiContext = useMemo(() => {
     if (!codes.length) return "还没有自选股。";
@@ -87,6 +95,28 @@ export function Watchlist() {
           )
         }
       />
+
+      {/* Tab 切换 */}
+      <div className="mb-4 flex gap-2">
+        {[
+          { value: "premarket" as const, label: "美港股自选", hint: "盘前准备用" },
+          { value: "review" as const, label: "A股自选", hint: "今日复盘用" },
+        ].map((t) => (
+          <button
+            key={t.value}
+            onClick={() => setMode(t.value)}
+            className={cn(
+              "flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
+              mode === t.value
+                ? "bg-primary/20 text-primary shadow-glow"
+                : "bg-black/20 text-muted-foreground hover:bg-black/30"
+            )}
+          >
+            {t.label}
+            <span className="ml-1.5 text-[11px] opacity-60">({t.hint})</span>
+          </button>
+        ))}
+      </div>
 
       <GlassCard className="mb-4">
         <label className="mb-1.5 block text-xs text-muted-foreground">

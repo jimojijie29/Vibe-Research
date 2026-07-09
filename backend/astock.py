@@ -579,19 +579,49 @@ def margin_trading(code: str, page_size: int = 30) -> list[dict]:
 
 
 def market_margin_balance() -> dict:
-    """沪深两市最新融资余额 / 融券余额 / 融资融券余额（元）。"""
+    """沪深两市最新融资余额 / 融券余额 / 融资融券余额（元）+ 较昨日变化。
+
+    优先使用 Tushare API（更稳定），失败时降级到 akshare。
+    """
+    # 优先尝试 Tushare
+    try:
+        import tushare_client
+        result = tushare_client.get_margin_balance(days=2)
+
+        # 转换为兼容格式
+        return {
+            "sh_rzye": result["sh_rzye"],
+            "sh_rqye": None,  # Tushare 不提供融券余额（金额），只有余量（股数）
+            "sh_rzrqye": None,  # 暂不计算融资融券余额
+            "sz_rzye": result["sz_rzye"],
+            "sz_rqye": None,
+            "sz_rzrqye": None,
+            "sh_rzye_change": result["sh_rzye_change"],
+            "sz_rzye_change": result["sz_rzye_change"],
+            "total_rzye_change": result["total_rzye_change"],
+            "trade_date": result.get("trade_date"),  # 新增：交易日期
+        }
+    except Exception:
+        pass  # 降级到 akshare
+
+    # 降级：使用 akshare
     try:
         ak = _akshare()
         sh = ak.stock_margin_sse()
         sz = ak.stock_margin_szse()
     except Exception:
         return {"sh_rzye": None, "sh_rqye": None, "sh_rzrqye": None,
-                "sz_rzye": None, "sz_rqye": None, "sz_rzrqye": None}
+                "sz_rzye": None, "sz_rqye": None, "sz_rzrqye": None,
+                "sh_rzye_change": None, "sz_rzye_change": None, "total_rzye_change": None,
+                "trade_date": None}
 
     # SSE: columns = [日期, 融资余额, 融资买入额, 融券余量, 融券卖出量, 融券偿还量, 融资融券余额]
-    sh_row = sh.iloc[0].tolist() if not sh.empty else [None] * 7
+    sh_today = sh.iloc[0].tolist() if not sh.empty else [None] * 7
+    sh_yesterday = sh.iloc[1].tolist() if len(sh) > 1 else [None] * 7
+
     # SZSE: single row, values in 亿元: [融资买入额, 融资余额, 融券卖出量, 融券余量, 融券余额, 融资融券余额]
-    sz_row = sz.iloc[0].tolist() if not sz.empty else [None] * 6
+    sz_today = sz.iloc[0].tolist() if not sz.empty else [None] * 6
+    sz_yesterday = sz.iloc[1].tolist() if len(sz) > 1 else [None] * 6
 
     import math
 
@@ -604,18 +634,45 @@ def market_margin_balance() -> dict:
             return None
         return None if math.isnan(f) or math.isinf(f) else f
 
-    sz_rzye = _to_yuan(sz_row[1]) if len(sz_row) > 1 else None
-    sz_rqye = _to_yuan(sz_row[4]) if len(sz_row) > 4 else None
-    sz_rzrqye = _to_yuan(sz_row[5]) if len(sz_row) > 5 else None
+    # 今日数据
+    sh_rzye_today = _to_yuan(sh_today[1]) if len(sh_today) > 1 else None
+    sz_rzye_today = _to_yuan(sz_today[1]) if len(sz_today) > 1 else None
+    sz_rzye_today_yuan = sz_rzye_today * 1e8 if sz_rzye_today is not None else None
+
+    # 昨日数据
+    sh_rzye_yesterday = _to_yuan(sh_yesterday[1]) if len(sh_yesterday) > 1 else None
+    sz_rzye_yesterday = _to_yuan(sz_yesterday[1]) if len(sz_yesterday) > 1 else None
+    sz_rzye_yesterday_yuan = sz_rzye_yesterday * 1e8 if sz_rzye_yesterday is not None else None
+
+    # 计算变化
+    sh_change = None
+    sz_change = None
+    total_change = None
+
+    if sh_rzye_today is not None and sh_rzye_yesterday is not None:
+        sh_change = sh_rzye_today - sh_rzye_yesterday
+    if sz_rzye_today_yuan is not None and sz_rzye_yesterday_yuan is not None:
+        sz_change = sz_rzye_today_yuan - sz_rzye_yesterday_yuan
+    if sh_change is not None and sz_change is not None:
+        total_change = sh_change + sz_change
+
+    sz_rzye = _to_yuan(sz_today[1]) if len(sz_today) > 1 else None
+    sz_rqye = _to_yuan(sz_today[4]) if len(sz_today) > 4 else None
+    sz_rzrqye = _to_yuan(sz_today[5]) if len(sz_today) > 5 else None
 
     return {
-        "sh_rzye": _to_yuan(sh_row[1]) if len(sh_row) > 1 else None,
+        "sh_rzye": sh_rzye_today,
         # SSE 不直接提供「融券余额（元）」，只提供融券余量（股数），故不填。
         "sh_rqye": None,
-        "sh_rzrqye": _to_yuan(sh_row[6]) if len(sh_row) > 6 else None,
+        "sh_rzrqye": _to_yuan(sh_today[6]) if len(sh_today) > 6 else None,
         "sz_rzye": sz_rzye * 1e8 if sz_rzye is not None else None,
         "sz_rqye": sz_rqye * 1e8 if sz_rqye is not None else None,
         "sz_rzrqye": sz_rzrqye * 1e8 if sz_rzrqye is not None else None,
+        # 新增：较昨日变化（元）
+        "sh_rzye_change": sh_change,
+        "sz_rzye_change": sz_change,
+        "total_rzye_change": total_change,
+        "trade_date": None,  # akshare 未提供明确的交易日期
     }
 
 
@@ -656,11 +713,21 @@ def margin_stock_rank(top: int = 10, date: str | None = None) -> dict:
     rows, trade_date = _margin_rows_for_date(date)
     if not rows:
         return {"buy": [], "sell": [], "date": trade_date}
+
+    # 按股票代码去重，保留每只股票的第一条记录
+    seen = set()
+    unique_rows = []
+    for r in rows:
+        code = r.get("SCODE", "")
+        if code and code not in seen:
+            seen.add(code)
+            unique_rows.append(r)
+
     parsed = [{
         "code": r.get("SCODE", ""), "name": r.get("SECNAME", ""),
         "rzye": r.get("RZYE", 0), "rzjme": r.get("RZJME", 0),
         "rzrqye": r.get("RZRQYE", 0), "rzrqyecz": r.get("RZRQYECZ", 0),
-    } for r in rows]
+    } for r in unique_rows]
     buy = sorted([r for r in parsed if r["rzjme"] > 0], key=lambda x: -x["rzjme"])[:top]
     sell = sorted([r for r in parsed if r["rzjme"] < 0], key=lambda x: x["rzjme"])[:top]
     return {"buy": buy, "sell": sell, "date": trade_date}

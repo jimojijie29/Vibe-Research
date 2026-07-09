@@ -187,27 +187,78 @@ def get_global_indices() -> list[dict]:
 
 
 def get_market_snapshot() -> dict:
-    """9点看盘聚合快照：A股指数、全球指数、成交额榜、两市融资融券余额。"""
+    """9点看盘聚合快照：A股指数、全球指数、成交额榜、两市融资融券余额、市场成交额对比。"""
     def build():
         from concurrent.futures import ThreadPoolExecutor, as_completed
 
         def fetch(name, fn):
             return name, fn()
 
+        # 尝试获取 Tushare 市场成交额（失败时静默降级）
+        def get_turnover_with_compare():
+            try:
+                import tushare_client
+                return tushare_client.get_market_turnover(days=2)
+            except Exception as e:
+                # 静默失败，返回空数据
+                import logging
+                logging.debug(f"Tushare market_turnover 失败，降级: {e}")
+                return {"total_turnover": None, "total_turnover_change": None}
+
         tasks = {
             "a_indices": astock.index_quote,
             "global_indices": gstock.global_indices,
             "turnover": lambda: astock.market_turnover_rank(20),
             "margin_balance": astock.market_margin_balance,
+            "market_turnover": get_turnover_with_compare,  # 新增：市场总成交额
         }
         results: dict = {}
-        with ThreadPoolExecutor(max_workers=4) as pool:
+        with ThreadPoolExecutor(max_workers=5) as pool:
             futures = {pool.submit(fetch, name, fn): name for name, fn in tasks.items()}
             for fut in as_completed(futures):
                 name, val = fut.result()
                 results[name] = val
-        return {
+
+        snapshot = {
             **results,
             "updated": datetime.now(BEIJING).strftime("%Y-%m-%d %H:%M"),
         }
+
+        # 保存市场数据到数据库
+        try:
+            import margin_db
+            # 提取数据
+            a_indices = snapshot.get("a_indices", {})
+            margin_balance = snapshot.get("margin_balance", {})
+            market_turnover = snapshot.get("market_turnover", {})
+
+            # 获取交易日期（优先从融资余额，因为最可靠）
+            trade_date = margin_balance.get("date")
+            if trade_date:
+                # 保存指数收盘价
+                sh_close = None
+                sz_close = None
+                for idx in a_indices.get("indices", []):
+                    if idx.get("code") == "000001.SH":
+                        sh_close = idx.get("close")
+                    elif idx.get("code") == "399001.SZ":
+                        sz_close = idx.get("close")
+
+                margin_db.save_market_index(trade_date, sh_close, sz_close)
+
+                # 保存融资余额和成交额
+                margin_db.save_market_stats(
+                    trade_date,
+                    margin_balance.get("sh_rzye"),
+                    margin_balance.get("sz_rzye"),
+                    margin_balance.get("total_rzye"),
+                    market_turnover.get("total_turnover")
+                )
+        except Exception as e:
+            # 数据保存失败不影响接口返回
+            import logging
+            logging.warning(f"保存市场数据到数据库失败: {e}")
+
+        return snapshot
+
     return _cached("snapshot", build, valid=lambda v: bool(v.get("a_indices") or v.get("global_indices")))

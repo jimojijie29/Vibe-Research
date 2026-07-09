@@ -2,6 +2,29 @@
 
 本文档面向部署和运维 Vibe-Research 的同学，涵盖部署步骤、健康检查、常见问题、回滚和监控。
 
+<!-- AUTO-GENERATED:scripts -->
+
+## 可用脚本命令
+
+### 前端 (frontend/)
+
+| 命令 | 说明 |
+|------|------|
+| `npm run dev` | 启动开发服务器（Vite，热重载） |
+| `npm run build` | 生产构建（TypeScript 编译 + Vite 打包） |
+| `npm run preview` | 预览生产构建结果 |
+
+### 后端 (backend/)
+
+| 命令 | 说明 |
+|------|------|
+| `python -m uvicorn app:app --host 0.0.0.0 --port 8900` | 启动后端服务 |
+| `python backfill_margin_history.py --days 30` | 回填融资排名历史数据（加速历史查询） |
+| `python mcp_server.py` | 启动 MCP Server（供 Claude Code 等 agent 调用） |
+| `pytest` | 运行测试套件 |
+
+<!-- /AUTO-GENERATED:scripts -->
+
 ## 部署方式
 
 当前项目以**手动部署**为主，无 Docker 镜像。推荐在单台服务器或本地机器上前后端一起运行。

@@ -63,23 +63,31 @@ def test_market_margin_balance_empty():
         assert astock.market_margin_balance() == {
             "sh_rzye": None, "sh_rqye": None, "sh_rzrqye": None,
             "sz_rzye": None, "sz_rqye": None, "sz_rzrqye": None,
+            "sh_rzye_change": None, "sz_rzye_change": None, "total_rzye_change": None,
         }
     finally:
         astock._akshare = original
 
 
 def test_market_margin_balance():
-    """SSE/SZSE 融资余额与融资融券余额按列位置正确解析为元。"""
+    """SSE/SZSE 融资余额与融资融券余额按列位置正确解析为元，并计算较昨日变化。"""
     import pandas as pd
     original = astock._akshare
     try:
         class FakeAk:
             def stock_margin_sse(self):
                 # [日期, 融资余额, 融资买入额, 融券余量, 融券卖出量, 融券偿还量, 融资融券余额]
-                return pd.DataFrame([["2026-07-08", 1000, 200, 300, 100, 50, 1100]])
+                # 第0行：今日，第1行：昨日
+                return pd.DataFrame([
+                    ["2026-07-08", 1000, 200, 300, 100, 50, 1100],
+                    ["2026-07-07", 950, 180, 290, 95, 48, 1050]
+                ])
             def stock_margin_szse(self):
                 # [融资买入额, 融资余额, 融券卖出量, 融券余量, 融券余额, 融资融券余额]（单位：亿元）
-                return pd.DataFrame([[200, 3000, 100, 200, 400, 3500]])
+                return pd.DataFrame([
+                    [200, 3000, 100, 200, 400, 3500],  # 今日
+                    [180, 2950, 95, 195, 390, 3450]    # 昨日
+                ])
         astock._akshare = FakeAk
         res = astock.market_margin_balance()
         assert res["sh_rzye"] == 1000.0
@@ -88,6 +96,10 @@ def test_market_margin_balance():
         assert res["sz_rzye"] == 3000.0 * 1e8
         assert res["sz_rqye"] == 400.0 * 1e8
         assert res["sz_rzrqye"] == 3500.0 * 1e8
+        # 新增：测试较昨日变化
+        assert res["sh_rzye_change"] == 50.0  # 1000 - 950
+        assert res["sz_rzye_change"] == 50.0 * 1e8  # (3000 - 2950) * 1e8
+        assert res["total_rzye_change"] == 50.0 + 50.0 * 1e8
     finally:
         astock._akshare = original
 

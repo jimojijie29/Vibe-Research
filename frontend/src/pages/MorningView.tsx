@@ -1,11 +1,18 @@
 import { useState, useEffect, useRef, useCallback } from "react";
 import { RefreshCw, Globe, TrendingUp, TrendingDown, Plus, X, Loader2, BarChart3, Wallet, CalendarDays } from "lucide-react";
 import { GlassCard } from "@/components/ui/GlassCard";
-import { api, type MarketSnapshot, type MarginRank, type GlobalBatchQuote, type Quote } from "@/lib/api";
+import { api, type MarketSnapshot, type MarginRank, type GlobalBatchQuote, type Quote, type GanzhiCalendar } from "@/lib/api";
 import { loadWatch, saveWatch, addCodes, isAShare, isGlobal } from "@/lib/watchlist";
 import { cn, pctColor, fmt, yi } from "@/lib/utils";
 
-export function MorningView() {
+type MorningViewMode = "premarket" | "review";
+
+interface MorningViewProps {
+  mode?: MorningViewMode;
+  showOnlyWatchlist?: boolean;  // 仅显示关注股票
+}
+
+export function MorningView({ mode = "premarket", showOnlyWatchlist = false }: MorningViewProps) {
   const [snapshot, setSnapshot] = useState<MarketSnapshot | null>(null);
   const [snapErr, setSnapErr] = useState(false);
   const [stockRank, setStockRank] = useState<MarginRank | null>(null);
@@ -15,8 +22,11 @@ export function MorningView() {
   const [rankDate, setRankDate] = useState<string>("");
   const rankReqRef = useRef(0);
 
+  // 干支日历（新增）
+  const [ganzhi, setGanzhi] = useState<GanzhiCalendar | null>(null);
+
   // 关注股票（自选，存本地）
-  const [watchCodes, setWatchCodes] = useState<string[]>(loadWatch);
+  const [watchCodes, setWatchCodes] = useState<string[]>(() => loadWatch(mode));
   const [watchQuotes, setWatchQuotes] = useState<Record<string, Quote>>({});
   const [watchGlobal, setWatchGlobal] = useState<GlobalBatchQuote[]>([]);
   const [watchInput, setWatchInput] = useState("");
@@ -65,8 +75,13 @@ export function MorningView() {
   }, []);
 
   const refreshWatch = (codes: string[]) => {
-    const aShares = codes.filter(isAShare);
-    const globals = codes.filter(isGlobal);
+    // 根据 mode 过滤股票
+    const filteredCodes = mode === "premarket"
+      ? codes.filter(isGlobal)  // 盘前准备：仅美港股
+      : codes.filter(isAShare);  // 今日复盘：仅A股
+
+    const aShares = filteredCodes.filter(isAShare);
+    const globals = filteredCodes.filter(isGlobal);
     setWatchQuotes({});
     setWatchGlobal([]);
     if (!aShares.length && !globals.length) return;
@@ -94,32 +109,32 @@ export function MorningView() {
   useEffect(() => {
     loadSnapshot();
     loadRanks();
-    refreshWatch(loadWatch());
-    // 只在挂载时执行一次；fetch 函数用 useCallback 保持稳定
+    refreshWatch(watchCodes);
+    // 加载干支日历
+    api.ganzhiCalendar().then(setGanzhi).catch(() => {});
+    // mode 变化时重新加载自选股
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [mode]);
 
   const addWatch = () => {
     const { next, added } = addCodes(watchCodes, watchInput);
     setWatchInput("");
     if (!added) return;
     setWatchCodes(next);
-    saveWatch(next);
+    saveWatch(mode, next);
     refreshWatch(next);
   };
 
   const removeWatch = (c: string) => {
     const next = watchCodes.filter((x) => x !== c);
     setWatchCodes(next);
-    saveWatch(next);
+    saveWatch(mode, next);
     refreshWatch(next);
   };
 
   const marginBalance = snapshot?.margin_balance;
   const totalRzye =
     (marginBalance?.sh_rzye ?? 0) + (marginBalance?.sz_rzye ?? 0);
-  const totalRzrqye =
-    (marginBalance?.sh_rzrqye ?? 0) + (marginBalance?.sz_rzrqye ?? 0);
 
   const placeholder = (done: boolean, date: string, err: boolean) => (
     <p className="py-4 text-center text-sm text-muted-foreground/60">
@@ -135,6 +150,64 @@ export function MorningView() {
 
   return (
     <div className="space-y-6">
+      {/* 仅显示关注股票时跳过其他区块 */}
+      {!showOnlyWatchlist && (
+        <>
+          {/* 0. 干支日历（新增） */}
+          {ganzhi && (
+        <GlassCard>
+          <h3 className="mb-4 flex items-center gap-2 text-sm font-semibold text-muted-foreground">
+            <CalendarDays className="h-4 w-4" />
+            干支日历
+          </h3>
+          <div className="grid grid-cols-2 md:grid-cols-5 gap-6">
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground mb-2">年</p>
+              <div className="flex flex-col items-center">
+                <p className="text-2xl font-semibold leading-tight">{ganzhi.year_gz[0]}</p>
+                <p className="text-2xl font-semibold leading-tight">{ganzhi.year_gz[1]}</p>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">{ganzhi.zodiac}年</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground mb-2">月</p>
+              <div className="flex flex-col items-center">
+                <p className="text-2xl font-semibold leading-tight">{ganzhi.month_gz[0]}</p>
+                <p className="text-2xl font-semibold leading-tight">{ganzhi.month_gz[1]}</p>
+              </div>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground mb-2">日</p>
+              <div className="flex flex-col items-center">
+                <p className="text-2xl font-semibold leading-tight">{ganzhi.day_gz[0]}</p>
+                <p className="text-2xl font-semibold leading-tight">{ganzhi.day_gz[1]}</p>
+              </div>
+              <p className="text-xs text-muted-foreground mt-2">{ganzhi.lunar_date}</p>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground mb-2">时</p>
+              <div className="flex flex-col items-center">
+                <p className="text-2xl font-semibold leading-tight">{ganzhi.hour_gz[0]}</p>
+                <p className="text-2xl font-semibold leading-tight">{ganzhi.hour_gz[1]}</p>
+              </div>
+            </div>
+            <div className="text-center">
+              <p className="text-xs text-muted-foreground mb-2">节气</p>
+              <div className="flex flex-col items-center justify-center h-[56px]">
+                {ganzhi.solar_term ? (
+                  <p className="text-xl font-semibold text-primary">{ganzhi.solar_term}</p>
+                ) : (
+                  <p className="text-sm text-muted-foreground/50">—</p>
+                )}
+              </div>
+            </div>
+          </div>
+          <p className="text-xs text-muted-foreground mt-4 text-center">
+            更新时间：{ganzhi.update_time.split(' ')[1].slice(0, 5)}
+          </p>
+        </GlassCard>
+      )}
+
       {/* 1. 大盘指数 */}
       <section>
         <div className="mb-3 flex items-center justify-between">
@@ -205,11 +278,18 @@ export function MorningView() {
               ))}
         </div>
       </section>
+        </>
+      )}
 
       {/* 3. 关注股票 */}
       <section>
         <div className="mb-3 flex items-center justify-between">
-          <h3 className="text-sm font-semibold text-muted-foreground">关注股票</h3>
+          <div className="flex items-center gap-2">
+            <h3 className="text-sm font-semibold text-muted-foreground">关注股票</h3>
+            <span className="text-[11px] text-muted-foreground/50">
+              {mode === "premarket" ? "仅美港股（A股未开盘）" : "仅A股"}
+            </span>
+          </div>
           {watchCodes.length > 0 && (
             <button
               onClick={() => refreshWatch(watchCodes)}
@@ -309,41 +389,15 @@ export function MorningView() {
         </GlassCard>
       </section>
 
-      {/* 4. 成交额 / 融资余额 */}
-      <section>
-        <div className="mb-3 flex items-center gap-2">
-          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-            <BarChart3 className="h-4 w-4" /> 市场成交与杠杆
-          </h3>
-          <span className="text-[11px] text-muted-foreground/50">沪深两市成交额 / 融资余额</span>
-        </div>
-        <div className="grid gap-4 md:grid-cols-3">
-          <GlassCard className="p-4">
-            <p className="text-xs text-muted-foreground">沪深两市总成交额</p>
-            <p className="mt-1 font-mono text-2xl font-bold text-primary">
-              {snapshot?.turnover?.length ? yi(snapshot.turnover.reduce((s, r) => s + (r.amount ?? 0), 0)) : "—"}
-            </p>
-            <p className="mt-1 text-[11px] text-muted-foreground/60">取自成交额榜前 20 汇总</p>
-          </GlassCard>
-          <GlassCard className="p-4">
-            <p className="text-xs text-muted-foreground">沪深两市融资余额</p>
-            <p className="mt-1 font-mono text-2xl font-bold text-primary">{totalRzye ? yi(totalRzye) : "—"}</p>
-            <p className="mt-1 text-[11px] text-muted-foreground/60">沪 + 深</p>
-          </GlassCard>
-          <GlassCard className="p-4">
-            <p className="text-xs text-muted-foreground">沪深两市融资融券余额</p>
-            <p className="mt-1 font-mono text-2xl font-bold text-primary">{totalRzrqye ? yi(totalRzrqye) : "—"}</p>
-            <p className="mt-1 text-[11px] text-muted-foreground/60">融资 + 融券</p>
-          </GlassCard>
-        </div>
-      </section>
-
-      {/* 5. 行业板块融资净买入/卖出前 10 */}
+      {/* 仅显示关注股票时跳过后续区块 */}
+      {!showOnlyWatchlist && (
+        <>
+      {/* 4. 行业板块融资净买入/卖出前 10 */}
       <section>
         <div className="mb-3 flex flex-wrap items-center justify-between gap-2">
           <div className="flex items-center gap-2">
             <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-              <Wallet className="h-4 w-4" /> 行业融资净买入 / 卖出 Top10
+              <Wallet className="h-4 w-4" /> 融资排名（行业 + 个股）
             </h3>
             {sectorRank?.date && <span className="text-[11px] text-muted-foreground/50">{sectorRank.date}</span>}
           </div>
@@ -362,6 +416,9 @@ export function MorningView() {
             />
           </label>
         </div>
+
+        {/* 行业融资排名 */}
+        <h4 className="mb-2 text-xs font-semibold text-muted-foreground/70">行业板块 Top10</h4>
         <div className="grid gap-4 md:grid-cols-2">
           {[
             { title: "净买入", icon: TrendingUp, color: "text-danger", rows: sectorRank?.buy || [] },
@@ -393,16 +450,9 @@ export function MorningView() {
             </GlassCard>
           ))}
         </div>
-      </section>
 
-      {/* 6. 个股融资净买入/卖出前 10 */}
-      <section>
-        <div className="mb-3 flex items-center gap-2">
-          <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
-            <Wallet className="h-4 w-4" /> 个股融资净买入 / 卖出 Top10
-          </h3>
-          {stockRank?.date && <span className="text-[11px] text-muted-foreground/50">{stockRank.date}</span>}
-        </div>
+        {/* 6. 个股融资净买入/卖出前 10 */}
+        <h4 className="mb-2 mt-6 text-xs font-semibold text-muted-foreground/70">个股 Top10</h4>
         <div className="grid gap-4 md:grid-cols-2">
           {[
             { title: "净买入", icon: TrendingUp, color: "text-danger", rows: stockRank?.buy || [] },
@@ -455,6 +505,8 @@ export function MorningView() {
       <p className="text-xs text-muted-foreground/50">
         数据更新时间：{snapshot?.updated || "—"}。融资排名数据基于东财最新交易日公开报表。
       </p>
+        </>
+      )}
     </div>
   );
 }

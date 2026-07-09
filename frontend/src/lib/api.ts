@@ -243,6 +243,13 @@ export interface MarketSnapshot {
   margin_balance: {
     sh_rzye: number | null; sh_rqye: number | null; sh_rzrqye: number | null;
     sz_rzye: number | null; sz_rqye: number | null; sz_rzrqye: number | null;
+    sh_rzye_change: number | null; sz_rzye_change: number | null; total_rzye_change: number | null;
+    trade_date?: string;  // YYYYMMDD格式
+  };
+  market_turnover: {
+    total_turnover: number | null;
+    total_turnover_change: number | null;
+    trade_date?: string;  // YYYYMMDD格式
   };
   updated: string;
 }
@@ -254,6 +261,18 @@ export interface MarginRank {
   buy: MarginRankItem[]; sell: MarginRankItem[]; date?: string;
 }
 
+export interface GanzhiCalendar {
+  year_gz: string;
+  month_gz: string;
+  day_gz: string;
+  hour_gz: string;
+  lunar_date: string;
+  zodiac: string;
+  solar_term: string;
+  solar_date: string;
+  update_time: string;
+}
+
 export const api = {
   health: () => get<{ ok: boolean }>("/health"),
   indices: () => get<IndexQuote[]>("/indices"),
@@ -263,6 +282,7 @@ export const api = {
   globalIndices: () => get<GlobalIndex[]>("/global/indices"),
   globalStock: (symbol: string) => get<GlobalStock>(`/global/stock?symbol=${encodeURIComponent(symbol)}`),
   globalQuotes: (symbols: string) => get<GlobalBatchQuote[]>(`/global/quotes?symbols=${encodeURIComponent(symbols)}`),
+  ganzhiCalendar: () => get<GanzhiCalendar>("/calendar/ganzhi"),
   marketSnapshot: () => get<MarketSnapshot>("/market/snapshot"),
   marginStockRank: (top = 10, date?: string) =>
     get<MarginRank>(`/margin/stock-rank?top=${top}${date ? `&date=${encodeURIComponent(date)}` : ""}`),

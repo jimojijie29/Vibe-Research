@@ -13,10 +13,10 @@ import { api, ApiError, type IndexQuote, type MarketOverview, type ShortTermEmot
 import { hasLlm, chatStream } from "@/lib/llm";
 import { cn, pctColor, fmt, yi } from "@/lib/utils";
 
-type Tab = "morning" | "review";
+type Tab = "premarket" | "review";
 
 export function DailyReview() {
-  const [tab, setTab] = useState<Tab>("morning");
+  const [tab, setTab] = useState<Tab>("premarket");
   const [indices, setIndices] = useState<IndexQuote[]>([]);
   const [review, setReview] = useState("");
   const [reviewLoading, setReviewLoading] = useState(false);
@@ -91,7 +91,7 @@ export function DailyReview() {
     <div>
       <PageHeader
         title="每日复盘"
-        subtitle={`${today} · 9 点看盘 / AI 复盘 一键切换`}
+        subtitle={`${today} · 盘前准备 / 今日复盘 一键切换`}
         actions={
           <div className="flex items-center gap-2">
             <AskAiButton
@@ -106,8 +106,8 @@ export function DailyReview() {
       {/* Tab 切换 */}
       <div className="mb-6 inline-flex rounded-lg border border-border bg-muted/30 p-1">
         {[
-          { key: "morning", label: "9 点看盘" },
-          { key: "review", label: "AI 复盘" },
+          { key: "premarket", label: "盘前准备" },
+          { key: "review", label: "今日复盘" },
         ].map((t) => (
           <button
             key={t.key}
@@ -122,10 +122,40 @@ export function DailyReview() {
         ))}
       </div>
 
-      {tab === "morning" && <MorningView />}
+      {tab === "premarket" && <MorningView mode="premarket" />}
 
       {tab === "review" && (
         <div className="space-y-6">
+          {/* 自选股票（今日复盘：仅A股） */}
+          <MorningView mode="review" showOnlyWatchlist />
+
+          {/* A股大盘指数 */}
+          <section>
+            <div className="mb-3 flex items-center gap-2">
+              <h3 className="flex items-center gap-1.5 text-sm font-semibold text-muted-foreground">
+                <TrendingUp className="h-4 w-4" /> A股大盘指数
+              </h3>
+            </div>
+            <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-6">
+              {["上证指数", "深证成指", "创业板指", "沪深300", "中证1000", "科创50"].map(name => {
+                const idx = indices.find(i => i.name === name);
+                return (
+                  <GlassCard key={name} className="p-4">
+                    <p className="text-xs text-muted-foreground">{name}</p>
+                    <p className="mt-1 font-mono text-2xl font-bold text-primary">
+                      {idx?.price ? fmt(idx.price) : "—"}
+                    </p>
+                    {idx?.change_pct != null && (
+                      <p className={cn("mt-1 text-sm font-medium", pctColor(idx.change_pct))}>
+                        {idx.change_pct > 0 ? "+" : ""}{fmt(idx.change_pct)}%
+                      </p>
+                    )}
+                  </GlassCard>
+                );
+              })}
+            </div>
+          </section>
+
           {/* AI 当日复盘 */}
           <GlassCard glow>
             <div className="flex items-center justify-between">

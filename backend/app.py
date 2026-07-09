@@ -20,6 +20,7 @@ from fastapi.responses import FileResponse, JSONResponse, StreamingResponse
 from pydantic import BaseModel
 
 import astock
+import calendar_utils
 import chat as chat_layer
 import cli_runtime
 import gstock
@@ -326,6 +327,28 @@ def global_quotes(symbols: str = Query(..., description="逗号分隔的美/港/
         raise HTTPException(502, f"批量美港股查询异常：{e}") from e
 
 
+@app.get("/api/calendar/ganzhi")
+def ganzhi():
+    """干支日历：实时展示农历年月日时（盘前准备专用）。
+
+    返回示例：
+    {
+        "year_gz": "丙午年",
+        "month_gz": "乙未月",
+        "day_gz": "庚申日",
+        "hour_gz": "未时",
+        "lunar_date": "六月初四",
+        "zodiac": "龙",
+        "solar_date": "2026-07-09",
+        "update_time": "2026-07-09 13:30:53"
+    }
+    """
+    try:
+        return calendar_utils.get_ganzhi_calendar()
+    except Exception as e:  # noqa: BLE001
+        raise HTTPException(502, f"干支日历计算异常：{e}") from e
+
+
 @app.get("/api/indices")
 def indices():
     """A股大盘指数实时行情（上证/深证成指/创业板指/沪深300/中证1000/科创50）。仅标准库。"""
@@ -543,13 +566,29 @@ def margin(code: str = Query(...)):
 def margin_stock_rank(top: int = Query(10, ge=1, le=50), date: str | None = Query(None)):
     """A股个股融资余额净买入/卖出前 N（默认最新交易日，可指定 date）。缓存 15 分钟。"""
     target = _parse_margin_date(date)
+
+    # 先尝试从数据库读取历史数据
+    if target:
+        import margin_db
+        cached_data = margin_db.get_margin_rank(target, "stock")
+        if cached_data:
+            return {"data": cached_data}
+
+    # 从内存缓存读取
     key = ("margin_stock_rank", top, target)
     hit = _DC_CACHE.get(key)
     if hit and _time.time() - hit[0] < 900:
         return {"data": hit[1]}
+
     try:
         data = astock.margin_stock_rank(top, date=target)
         _DC_CACHE[key] = (_time.time(), data)
+
+        # 保存到数据库（仅保存完整的top=10数据）
+        if top == 10 and data.get("date"):
+            import margin_db
+            margin_db.save_margin_rank(data["date"], "stock", data)
+
         return {"data": data}
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"个股融资排名异常：{e}") from e
@@ -559,13 +598,29 @@ def margin_stock_rank(top: int = Query(10, ge=1, le=50), date: str | None = Quer
 def margin_sector_rank(top: int = Query(10, ge=1, le=50), date: str | None = Query(None)):
     """A股行业板块融资余额净买入/卖出前 N（默认最新交易日，可指定 date）。缓存 15 分钟。"""
     target = _parse_margin_date(date)
+
+    # 先尝试从数据库读取历史数据
+    if target:
+        import margin_db
+        cached_data = margin_db.get_margin_rank(target, "sector")
+        if cached_data:
+            return {"data": cached_data}
+
+    # 从内存缓存读取
     key = ("margin_sector_rank", top, target)
     hit = _DC_CACHE.get(key)
     if hit and _time.time() - hit[0] < 900:
         return {"data": hit[1]}
+
     try:
         data = astock.margin_sector_rank(top, date=target)
         _DC_CACHE[key] = (_time.time(), data)
+
+        # 保存到数据库（仅保存完整的top=10数据）
+        if top == 10 and data.get("date"):
+            import margin_db
+            margin_db.save_margin_rank(data["date"], "sector", data)
+
         return {"data": data}
     except Exception as e:  # noqa: BLE001
         raise HTTPException(502, f"行业融资排名异常：{e}") from e
