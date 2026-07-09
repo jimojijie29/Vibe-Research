@@ -19,7 +19,10 @@ export function Sectors() {
       <div className="grid grid-cols-1 gap-4 sm:grid-cols-2 lg:grid-cols-3">
         {sectors.map((s) => (
           <Link key={s.key} to={`/sectors/${s.key}`}>
-            <GlassCard glow={s.hot} className="flex h-full flex-col justify-between">
+            <GlassCard
+              glow={s.hot}
+              className="flex h-full flex-col justify-between"
+            >
               <div>
                 <div className="mb-1 flex items-center gap-2">
                   <h3 className="text-base font-bold">{s.label}</h3>
@@ -29,7 +32,9 @@ export function Sectors() {
                     </span>
                   )}
                 </div>
-                <p className="text-xs leading-relaxed text-muted-foreground">{s.tagline}</p>
+                <p className="text-xs leading-relaxed text-muted-foreground">
+                  {s.tagline}
+                </p>
               </div>
               <div className="mt-3 flex items-center justify-between border-t border-border/50 pt-3 text-xs">
                 <span className="text-muted-foreground">
@@ -43,7 +48,8 @@ export function Sectors() {
       </div>
 
       <p className="mt-4 text-center text-xs text-muted-foreground/60">
-        共 {sectors.length} 个板块，其中 {hotCount} 个热门 · 环节持续实时核实补全
+        共 {sectors.length} 个板块，其中 {hotCount} 个热门 ·
+        环节持续实时核实补全
       </p>
       <Disclaimer />
     </div>

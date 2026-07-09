@@ -3,10 +3,10 @@
 
 export interface Note {
   id: string;
-  kind: string;   // 复盘 / 今日要点 / 问AI
-  title: string;  // 如「每日复盘 2026-07-04」「AI 算力 今日要点」「问 AI · 600519」
+  kind: string; // 复盘 / 今日要点 / 问AI
+  title: string; // 如「每日复盘 2026-07-04」「AI 算力 今日要点」「问 AI · 600519」
   content: string; // markdown 正文
-  ts: number;      // 保存时间戳(ms)
+  ts: number; // 保存时间戳(ms)
 }
 
 const KEY = "vr-notes";

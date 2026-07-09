@@ -3,8 +3,8 @@
 // 行情复用 /api/quote（A股）与 /api/global/quotes（全球）；复盘时把关注股行情一并喂给用户自己的 AI。
 // 【分离存储】盘前准备和今日复盘各自独立的自选股列表
 
-const KEY_GLOBAL = "vr-watchlist-global";  // 美港股（盘前准备）
-const KEY_ASTOCK = "vr-watchlist-astock";  // A股（今日复盘）
+const KEY_GLOBAL = "vr-watchlist-global"; // 美港股（盘前准备）
+const KEY_ASTOCK = "vr-watchlist-astock"; // A股（今日复盘）
 
 // A 股：6 位数字。全球：1-16 位字母/数字/点，至少含一个字母或点（区分于 A 股纯 6 位数字）。
 const A_SHARE_RE = /^\d{6}$/;
@@ -51,7 +51,10 @@ export function parseCodes(raw: string): string[] {
 }
 
 // 把用户输入的一串代码并入已有自选，返回去重后的新列表 + 实际新增数量。
-export function addCodes(existing: string[], raw: string): { next: string[]; added: number } {
+export function addCodes(
+  existing: string[],
+  raw: string,
+): { next: string[]; added: number } {
   const incoming = parseCodes(raw).filter((c) => !existing.includes(c));
   return { next: [...existing, ...incoming], added: incoming.length };
 }

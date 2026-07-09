@@ -10,7 +10,13 @@ createRoot(document.getElementById("root")!).render(
   <StrictMode>
     <ErrorBoundary>
       <RouterProvider router={router} />
-      <Toaster position="bottom-right" theme="dark" richColors closeButton duration={3500} />
+      <Toaster
+        position="bottom-right"
+        theme="dark"
+        richColors
+        closeButton
+        duration={3500}
+      />
     </ErrorBoundary>
-  </StrictMode>
+  </StrictMode>,
 );

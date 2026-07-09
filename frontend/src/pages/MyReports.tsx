@@ -1,5 +1,12 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { Upload, FileText, Trash2, Download, Loader2, FolderOpen } from "lucide-react";
+import {
+  Upload,
+  FileText,
+  Trash2,
+  Download,
+  Loader2,
+  FolderOpen,
+} from "lucide-react";
 import { PageHeader } from "@/components/ui/PageHeader";
 import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
@@ -7,9 +14,17 @@ import { api, ApiError, downloadReport, type MyReport } from "@/lib/api";
 import { cn } from "@/lib/utils";
 
 const fmtSize = (b: number) =>
-  b < 1024 ? `${b}B` : b < 1048576 ? `${(b / 1024).toFixed(0)}KB` : `${(b / 1048576).toFixed(1)}MB`;
+  b < 1024
+    ? `${b}B`
+    : b < 1048576
+      ? `${(b / 1024).toFixed(0)}KB`
+      : `${(b / 1048576).toFixed(1)}MB`;
 const fmtDate = (ts: number) =>
-  new Date(ts).toLocaleDateString("zh-CN", { year: "numeric", month: "2-digit", day: "2-digit" });
+  new Date(ts).toLocaleDateString("zh-CN", {
+    year: "numeric",
+    month: "2-digit",
+    day: "2-digit",
+  });
 
 // 读文件为 dataURL（含 base64）；后端会剥掉 data: 前缀。
 const fileToB64 = (file: File): Promise<string> =>
@@ -77,7 +92,11 @@ export function MyReports() {
     for (const r of reports) (g[r.industry] ||= []).push(r);
     // 「未分类」排最后，其余按条数多→少
     return Object.entries(g).sort((a, b) =>
-      a[0] === "未分类" ? 1 : b[0] === "未分类" ? -1 : b[1].length - a[1].length,
+      a[0] === "未分类"
+        ? 1
+        : b[0] === "未分类"
+          ? -1
+          : b[1].length - a[1].length,
     );
   }, [reports]);
 
@@ -104,7 +123,9 @@ export function MyReports() {
           onClick={() => inputRef.current?.click()}
           className={cn(
             "flex cursor-pointer flex-col items-center justify-center gap-2 rounded-xl border-2 border-dashed py-10 text-center transition-colors",
-            drag ? "border-primary bg-primary/10" : "border-border hover:border-primary/50 hover:bg-primary/5",
+            drag
+              ? "border-primary bg-primary/10"
+              : "border-border hover:border-primary/50 hover:bg-primary/5",
           )}
         >
           {busy ? (
@@ -151,8 +172,12 @@ export function MyReports() {
           {grouped.map(([industry, items]) => (
             <GlassCard key={industry}>
               <h3 className="mb-2 flex items-center gap-2 text-sm font-semibold">
-                <span className="rounded bg-primary/15 px-2 py-0.5 text-xs text-primary">{industry}</span>
-                <span className="text-xs font-normal text-muted-foreground">{items.length} 份</span>
+                <span className="rounded bg-primary/15 px-2 py-0.5 text-xs text-primary">
+                  {industry}
+                </span>
+                <span className="text-xs font-normal text-muted-foreground">
+                  {items.length} 份
+                </span>
               </h3>
               <div className="divide-y divide-border/30">
                 {items.map((r) => (

@@ -5,13 +5,27 @@ import { GlassCard } from "@/components/ui/GlassCard";
 import { Disclaimer } from "@/components/ui/Disclaimer";
 import { AskAiButton } from "@/components/ui/AskAiButton";
 import { api, type Quote, type GlobalBatchQuote } from "@/lib/api";
-import { loadWatch, saveWatch, addCodes, isAShare, isGlobal, type WatchlistMode } from "@/lib/watchlist";
+import {
+  loadWatch,
+  saveWatch,
+  addCodes,
+  isAShare,
+  isGlobal,
+  type WatchlistMode,
+} from "@/lib/watchlist";
 import { cn } from "@/lib/utils";
 
 // A 股红涨绿跌（与整个看板一致）。
 const color = (v: number | null | undefined) =>
-  v == null ? "text-muted-foreground" : v > 0 ? "text-danger" : v < 0 ? "text-success" : "text-muted-foreground";
-const pct = (v: number | null | undefined) => (v == null ? "—" : `${v > 0 ? "+" : ""}${v}%`);
+  v == null
+    ? "text-muted-foreground"
+    : v > 0
+      ? "text-danger"
+      : v < 0
+        ? "text-success"
+        : "text-muted-foreground";
+const pct = (v: number | null | undefined) =>
+  v == null ? "—" : `${v > 0 ? "+" : ""}${v}%`;
 
 export function Watchlist() {
   const [mode, setMode] = useState<WatchlistMode>("premarket");
@@ -31,14 +45,26 @@ export function Watchlist() {
     setLoading(true);
     const jobs: Promise<void>[] = [];
     if (aShares.length) {
-      jobs.push(api.quote(aShares.join(",")).then(setQuotes).catch(() => {}));
+      jobs.push(
+        api
+          .quote(aShares.join(","))
+          .then(setQuotes)
+          .catch(() => {}),
+      );
     }
     if (globalSymbols.length) {
-      jobs.push(api.globalQuotes(globalSymbols.join(",")).then(setGlobals).catch(() => {}));
+      jobs.push(
+        api
+          .globalQuotes(globalSymbols.join(","))
+          .then(setGlobals)
+          .catch(() => {}),
+      );
     }
     Promise.all(jobs).finally(() => setLoading(false));
   };
-  useEffect(() => { refresh(loadWatch(mode)); }, [mode]);
+  useEffect(() => {
+    refresh(loadWatch(mode));
+  }, [mode]);
 
   const add = () => {
     const { next, added } = addCodes(codes, input);
@@ -47,12 +73,17 @@ export function Watchlist() {
       setInput("");
       return;
     }
-    setCodes(next); saveWatch(mode, next); setInput(""); setHint(`已添加 ${added} 只`);
+    setCodes(next);
+    saveWatch(mode, next);
+    setInput("");
+    setHint(`已添加 ${added} 只`);
     refresh(next);
   };
   const remove = (c: string) => {
     const next = codes.filter((x) => x !== c);
-    setCodes(next); saveWatch(mode, next); refresh(next);
+    setCodes(next);
+    saveWatch(mode, next);
+    refresh(next);
   };
 
   // mode 切换时重新加载
@@ -90,7 +121,11 @@ export function Watchlist() {
             <AskAiButton
               context={aiContext}
               label="让 AI 读自选"
-              suggestions={["这几只里哪些估值偏高", "帮我按赛道分组看看", "各自最大的风险点是什么"]}
+              suggestions={[
+                "这几只里哪些估值偏高",
+                "帮我按赛道分组看看",
+                "各自最大的风险点是什么",
+              ]}
             />
           )
         }
@@ -99,7 +134,11 @@ export function Watchlist() {
       {/* Tab 切换 */}
       <div className="mb-4 flex gap-2">
         {[
-          { value: "premarket" as const, label: "美港股自选", hint: "盘前准备用" },
+          {
+            value: "premarket" as const,
+            label: "美港股自选",
+            hint: "盘前准备用",
+          },
           { value: "review" as const, label: "A股自选", hint: "今日复盘用" },
         ].map((t) => (
           <button
@@ -109,7 +148,7 @@ export function Watchlist() {
               "flex-1 rounded-lg px-4 py-2.5 text-sm font-medium transition-colors",
               mode === t.value
                 ? "bg-primary/20 text-primary shadow-glow"
-                : "bg-black/20 text-muted-foreground hover:bg-black/30"
+                : "bg-black/20 text-muted-foreground hover:bg-black/30",
             )}
           >
             {t.label}
@@ -120,7 +159,8 @@ export function Watchlist() {
 
       <GlassCard className="mb-4">
         <label className="mb-1.5 block text-xs text-muted-foreground">
-          批量添加 —— 粘贴一串代码即可（逗号 / 空格 / 换行都行，自动识别 A 股 6 位代码与全球代码如 AAPL / 00700 / 005930.KS）
+          批量添加 —— 粘贴一串代码即可（逗号 / 空格 / 换行都行，自动识别 A 股 6
+          位代码与全球代码如 AAPL / 00700 / 005930.KS）
         </label>
         <div className="flex gap-2">
           <textarea
@@ -140,14 +180,18 @@ export function Watchlist() {
             <Plus className="h-4 w-4" /> 添加
           </button>
         </div>
-        {hint && <p className="mt-2 text-xs text-muted-foreground/70">{hint}</p>}
+        {hint && (
+          <p className="mt-2 text-xs text-muted-foreground/70">{hint}</p>
+        )}
       </GlassCard>
 
       <GlassCard glow>
         <div className="mb-2 flex items-center justify-between">
           <h3 className="flex items-center gap-1.5 font-semibold">
             <Star className="h-4 w-4 text-primary" /> 自选总览
-            <span className="text-xs font-normal text-muted-foreground">（{codes.length}）</span>
+            <span className="text-xs font-normal text-muted-foreground">
+              （{codes.length}）
+            </span>
           </h3>
           <button
             onClick={() => refresh(codes)}
@@ -155,7 +199,9 @@ export function Watchlist() {
             className="text-muted-foreground hover:text-primary"
             title="刷新价格"
           >
-            <RefreshCw className={cn("h-3.5 w-3.5", loading && "animate-spin")} />
+            <RefreshCw
+              className={cn("h-3.5 w-3.5", loading && "animate-spin")}
+            />
           </button>
         </div>
         {codes.length === 0 ? (
@@ -167,8 +213,20 @@ export function Watchlist() {
             <table className="w-full text-sm">
               <thead>
                 <tr className="border-b border-border/50 text-left text-xs text-muted-foreground">
-                  {["名称", "代码", "现价", "涨跌%", "PE(TTM)", "PB", "换手%", ""].map((h) => (
-                    <th key={h} className="whitespace-nowrap px-2 py-2 font-medium">
+                  {[
+                    "名称",
+                    "代码",
+                    "现价",
+                    "涨跌%",
+                    "PE(TTM)",
+                    "PB",
+                    "换手%",
+                    "",
+                  ].map((h) => (
+                    <th
+                      key={h}
+                      className="whitespace-nowrap px-2 py-2 font-medium"
+                    >
                       {h}
                     </th>
                   ))}
@@ -180,13 +238,37 @@ export function Watchlist() {
                     const q = quotes[c];
                     return (
                       <tr key={c} className="border-b border-border/30">
-                        <td className="px-2 py-2.5 font-medium">{q?.name || "—"}</td>
-                        <td className="px-2 py-2.5 font-mono text-xs text-muted-foreground">{c}</td>
-                        <td className={cn("px-2 py-2.5 font-mono", color(q?.change_pct))}>{q ? q.price : "—"}</td>
-                        <td className={cn("px-2 py-2.5 font-mono", color(q?.change_pct))}>{q ? pct(q.change_pct) : "—"}</td>
-                        <td className="px-2 py-2.5 font-mono text-muted-foreground">{q?.pe_ttm ?? "—"}</td>
-                        <td className="px-2 py-2.5 font-mono text-muted-foreground">{q?.pb ?? "—"}</td>
-                        <td className="px-2 py-2.5 font-mono text-muted-foreground">{q?.turnover_pct ?? "—"}</td>
+                        <td className="px-2 py-2.5 font-medium">
+                          {q?.name || "—"}
+                        </td>
+                        <td className="px-2 py-2.5 font-mono text-xs text-muted-foreground">
+                          {c}
+                        </td>
+                        <td
+                          className={cn(
+                            "px-2 py-2.5 font-mono",
+                            color(q?.change_pct),
+                          )}
+                        >
+                          {q ? q.price : "—"}
+                        </td>
+                        <td
+                          className={cn(
+                            "px-2 py-2.5 font-mono",
+                            color(q?.change_pct),
+                          )}
+                        >
+                          {q ? pct(q.change_pct) : "—"}
+                        </td>
+                        <td className="px-2 py-2.5 font-mono text-muted-foreground">
+                          {q?.pe_ttm ?? "—"}
+                        </td>
+                        <td className="px-2 py-2.5 font-mono text-muted-foreground">
+                          {q?.pb ?? "—"}
+                        </td>
+                        <td className="px-2 py-2.5 font-mono text-muted-foreground">
+                          {q?.turnover_pct ?? "—"}
+                        </td>
                         <td className="px-2 py-2.5">
                           <button
                             onClick={() => remove(c)}
@@ -203,15 +285,37 @@ export function Watchlist() {
                   const q = g?.quote;
                   return (
                     <tr key={c} className="border-b border-border/30">
-                      <td className="px-2 py-2.5 font-medium">{g?.name || "—"}</td>
-                      <td className="px-2 py-2.5 font-mono text-xs text-muted-foreground">{c}</td>
-                      <td className={cn("px-2 py-2.5 font-mono", color(q?.change_pct ?? 0))}>{q?.price ?? "—"}</td>
-                      <td className={cn("px-2 py-2.5 font-mono", color(q?.change_pct ?? 0))}>
+                      <td className="px-2 py-2.5 font-medium">
+                        {g?.name || "—"}
+                      </td>
+                      <td className="px-2 py-2.5 font-mono text-xs text-muted-foreground">
+                        {c}
+                      </td>
+                      <td
+                        className={cn(
+                          "px-2 py-2.5 font-mono",
+                          color(q?.change_pct ?? 0),
+                        )}
+                      >
+                        {q?.price ?? "—"}
+                      </td>
+                      <td
+                        className={cn(
+                          "px-2 py-2.5 font-mono",
+                          color(q?.change_pct ?? 0),
+                        )}
+                      >
                         {q?.price == null ? "—" : pct(q.change_pct)}
                       </td>
-                      <td className="px-2 py-2.5 font-mono text-muted-foreground">—</td>
-                      <td className="px-2 py-2.5 font-mono text-muted-foreground">—</td>
-                      <td className="px-2 py-2.5 font-mono text-muted-foreground">—</td>
+                      <td className="px-2 py-2.5 font-mono text-muted-foreground">
+                        —
+                      </td>
+                      <td className="px-2 py-2.5 font-mono text-muted-foreground">
+                        —
+                      </td>
+                      <td className="px-2 py-2.5 font-mono text-muted-foreground">
+                        —
+                      </td>
                       <td className="px-2 py-2.5">
                         <button
                           onClick={() => remove(c)}
